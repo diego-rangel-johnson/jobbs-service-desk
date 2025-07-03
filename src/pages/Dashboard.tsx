@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 const Dashboard = () => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [showNewTicketDialog, setShowNewTicketDialog] = useState(false);
-  const { user, signOut, isAdmin, isLoading } = useAuth();
+  const { user, signOut, isAdmin, isSupervisor, isLoading } = useAuth();
   const { tickets, isLoading: ticketsLoading, createTicket, refreshTickets } = useTickets();
   const navigate = useNavigate();
 
@@ -23,8 +23,11 @@ const Dashboard = () => {
     if (!isLoading && isAdmin) {
       console.log('👑 Admin detectado no Dashboard, redirecionando para /admin');
       navigate('/admin', { replace: true });
+    } else if (!isLoading && isSupervisor) {
+      console.log('👨‍💼 Supervisor detectado no Dashboard, redirecionando para /supervisor');
+      navigate('/supervisor', { replace: true });
     }
-  }, [isAdmin, isLoading, navigate]);
+  }, [isAdmin, isSupervisor, isLoading, navigate]);
 
   const handleLogout = async () => {
     await signOut();
@@ -70,10 +73,10 @@ const Dashboard = () => {
                     Novo Ticket
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-2xl w-full mx-auto my-8 max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>Criar Novo Ticket</DialogTitle>
-                    <DialogDescription>
+                    <DialogTitle className="text-xl font-semibold text-center">Criar Novo Ticket</DialogTitle>
+                    <DialogDescription className="text-center text-muted-foreground">
                       Preencha as informações para criar um novo ticket de suporte.
                     </DialogDescription>
                   </DialogHeader>

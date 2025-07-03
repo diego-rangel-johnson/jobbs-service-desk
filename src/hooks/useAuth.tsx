@@ -11,6 +11,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   isAdmin: boolean;
   isSupport: boolean;
+  isSupervisor: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -164,6 +165,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const isAdmin = userRoles.includes('admin');
   const isSupport = userRoles.includes('support') || isAdmin;
+  const isSupervisor = userRoles.includes('supervisor');
 
   // Log detalhado das roles sempre que mudarem
   useEffect(() => {
@@ -173,10 +175,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         roles: userRoles,
         isAdmin,
         isSupport,
+        isSupervisor,
         isLoading
       });
     }
-  }, [user, userRoles, isAdmin, isSupport, isLoading]);
+  }, [user, userRoles, isAdmin, isSupport, isSupervisor, isLoading]);
 
   const value = {
     user,
@@ -186,7 +189,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signIn,
     signOut,
     isAdmin,
-    isSupport
+    isSupport,
+    isSupervisor
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

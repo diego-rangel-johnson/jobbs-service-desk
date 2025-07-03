@@ -25,6 +25,10 @@ export interface Ticket {
   } | null;
   updates?: TicketUpdate[];
   attachments?: TicketAttachment[];
+  company?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 export interface TicketUpdate {
@@ -52,7 +56,7 @@ export interface TicketAttachment {
 export const useTickets = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { user, isAdmin, isSupport } = useAuth();
+  const { user, isAdmin, isSupport, isSupervisor } = useAuth();
 
   const fetchTickets = useCallback(async () => {
     if (!user) return;
@@ -60,16 +64,38 @@ export const useTickets = () => {
     try {
       setIsLoading(true);
       
-      // Primeiro, buscar os tickets básicos
-      let query = supabase
+      // Buscar tickets com informações da empresa
+      let query = (supabase as any)
         .from('tickets')
-        .select('*')
+        .select(`
+          *,
+          company:companies(id, name)
+        `)
         .order('created_at', { ascending: false });
 
-      // If user is not admin/support, only show their tickets
+      // Aplicar filtros baseados nas roles
       if (!isAdmin && !isSupport) {
-        query = query.eq('customer_id', user.id);
+        if (isSupervisor) {
+          // Supervisores veem tickets da empresa onde trabalham
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('company_id')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (userProfile?.company_id) {
+            // Tickets onde: é o cliente OU é da mesma empresa OU está atribuído a ele
+            query = query.or(`customer_id.eq.${user.id},company_id.eq.${userProfile.company_id},assignee_id.eq.${user.id}`);
+          } else {
+            // Se supervisor sem empresa, vê apenas seus próprios tickets
+            query = query.eq('customer_id', user.id);
+          }
+        } else {
+          // Usuários normais veem apenas seus próprios tickets
+          query = query.eq('customer_id', user.id);
+        }
       }
+      // Admin e Support veem todos os tickets (sem filtro adicional)
 
       const { data: ticketsData, error: ticketsError } = await query;
 
@@ -91,36 +117,37 @@ export const useTickets = () => {
         ])
       ];
 
-      const { data: profilesData, error: profilesError } = await supabase
+      const { data: profilesData, error: profilesError } = await (supabase as any)
         .from('profiles')
-        .select('user_id, name')
+        .select('user_id, name, company_id')
         .in('user_id', userIds);
 
       if (profilesError) {
         console.warn('Error fetching profiles:', profilesError);
-        // Continuar mesmo com erro nos profiles
       }
 
       // Criar mapa de profiles para lookup rápido
       const profilesMap = (profilesData || []).reduce((acc, profile) => {
         acc[profile.user_id] = profile;
         return acc;
-      }, {} as Record<string, { user_id: string; name: string }>);
+      }, {} as Record<string, { user_id: string; name: string; company_id?: string }>);
 
-      // Enriquecer tickets com dados dos profiles
+      // Enriquecer tickets com dados dos profiles e empresa
       const enrichedTickets = ticketsData.map(ticket => ({
         ...ticket,
         customer: profilesMap[ticket.customer_id] || null,
-        assignee: ticket.assignee_id ? profilesMap[ticket.assignee_id] || null : null
+        assignee: ticket.assignee_id ? profilesMap[ticket.assignee_id] || null : null,
+        company: ticket.company || null // Já vem do join
       }));
 
       setTickets(enrichedTickets);
+      console.log(`✅ ${enrichedTickets.length} tickets carregados`);
     } catch (error) {
-      console.error('Error fetching tickets:', error);
+      console.error('Erro ao buscar tickets:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [user, isAdmin, isSupport]);
+  }, [user, isAdmin, isSupport, isSupervisor]);
 
   const uploadFile = async (file: File, ticketId: string): Promise<{ success: boolean; fileUrl?: string; error?: string }> => {
     try {

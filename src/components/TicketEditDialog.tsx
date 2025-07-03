@@ -53,24 +53,24 @@ const TicketEditDialog = ({ open, onOpenChange, ticket, onSave, availableUsers =
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
-        <DialogHeader className="pb-2">
-          <DialogTitle className="text-base">Editar Ticket {ticket.id}</DialogTitle>
+      <DialogContent className="max-w-2xl w-full mx-auto my-8 max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="pb-4">
+          <DialogTitle className="text-xl font-semibold text-center">Editar Ticket #{ticket.id}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="space-y-6">
           <div>
-            <Label className="text-sm">Assunto</Label>
-            <p className="text-sm text-muted-foreground mt-1 p-2 bg-muted rounded text-xs">
+            <Label className="text-sm font-medium">Assunto</Label>
+            <p className="text-sm text-muted-foreground mt-2 p-3 bg-muted rounded-md">
               {ticket.subject}
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="status" className="text-sm">Status</Label>
+              <Label htmlFor="status" className="text-sm font-medium">Status</Label>
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="h-8">
+                <SelectTrigger className="h-10 mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -82,9 +82,9 @@ const TicketEditDialog = ({ open, onOpenChange, ticket, onSave, availableUsers =
             </div>
 
             <div>
-              <Label htmlFor="priority" className="text-sm">Prioridade</Label>
+              <Label htmlFor="priority" className="text-sm font-medium">Prioridade</Label>
               <Select value={priority} onValueChange={setPriority}>
-                <SelectTrigger className="h-8">
+                <SelectTrigger className="h-10 mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -96,67 +96,69 @@ const TicketEditDialog = ({ open, onOpenChange, ticket, onSave, availableUsers =
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="assignee" className="text-sm">Responsável</Label>
-            <Select value={assignee} onValueChange={setAssignee}>
-              <SelectTrigger className="h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Não atribuído">Não atribuído</SelectItem>
-                {availableUsers.map((user) => (
-                  <SelectItem key={user.user_id} value={user.name}>
-                    {user.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="assignee" className="text-sm font-medium">Responsável</Label>
+              <Select value={assignee} onValueChange={setAssignee}>
+                <SelectTrigger className="h-10 mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Não atribuído">Não atribuído</SelectItem>
+                  {availableUsers.map((user) => (
+                    <SelectItem key={user.user_id} value={user.name}>
+                      {user.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="department" className="text-sm font-medium">Departamento</Label>
+              <Select value={department} onValueChange={setDepartment}>
+                <SelectTrigger className="h-10 mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TI">TI</SelectItem>
+                  <SelectItem value="Suporte">Suporte</SelectItem>
+                  <SelectItem value="Desenvolvimento">Desenvolvimento</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>
-            <Label htmlFor="department" className="text-sm">Departamento</Label>
-            <Select value={department} onValueChange={setDepartment}>
-              <SelectTrigger className="h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TI">TI</SelectItem>
-                <SelectItem value="Suporte">Suporte</SelectItem>
-                <SelectItem value="Desenvolvimento">Desenvolvimento</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="estimatedDate" className="text-sm">Data de Previsão</Label>
+            <Label htmlFor="estimatedDate" className="text-sm font-medium">Data de Previsão</Label>
             <Input
               id="estimatedDate"
               type="date"
               value={estimatedDate}
               onChange={(e) => setEstimatedDate(e.target.value)}
-              className="h-8"
+              className="h-10 mt-1"
             />
           </div>
 
           <div>
-            <Label htmlFor="comment" className="text-sm">Comentário (opcional)</Label>
+            <Label htmlFor="comment" className="text-sm font-medium">Comentário (opcional)</Label>
             <Textarea
               id="comment"
-              placeholder="Adicione um comentário..."
+              placeholder="Adicione um comentário sobre as alterações..."
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              rows={2}
-              className="text-sm resize-none"
+              rows={3}
+              className="text-sm resize-none mt-1"
             />
           </div>
         </div>
 
-        <DialogFooter className="pt-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} size="sm">
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-6">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
             Cancelar
           </Button>
-          <Button onClick={handleSave} size="sm">
-            Salvar
+          <Button onClick={handleSave} className="flex-1">
+            Salvar Alterações
           </Button>
         </DialogFooter>
       </DialogContent>

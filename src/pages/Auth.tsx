@@ -7,7 +7,7 @@ import LoginForm from '@/components/auth/LoginForm';
 import SignupForm from '@/components/auth/SignupForm';
 
 const Auth = () => {
-  const { user, isAdmin, isLoading } = useAuth();
+  const { user, isAdmin, isSupervisor, isLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -16,12 +16,15 @@ const Auth = () => {
       if (isAdmin) {
         console.log('👑 Admin detectado, redirecionando para /admin');
         navigate('/admin');
+      } else if (isSupervisor) {
+        console.log('👨‍💼 Supervisor detectado, redirecionando para /supervisor');
+        navigate('/supervisor');
       } else {
         console.log('👤 Usuário normal, redirecionando para /dashboard');
         navigate('/dashboard');
       }
     }
-  }, [user, isAdmin, isLoading, navigate]);
+  }, [user, isAdmin, isSupervisor, isLoading, navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">

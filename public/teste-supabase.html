@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Supabase</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .resultado { margin: 10px 0; padding: 10px; border: 1px solid #ccc; background: #f9f9f9; }
+        .sucesso { border-color: #4CAF50; background: #e8f5e9; }
+        .erro { border-color: #f44336; background: #ffebee; }
+        button { padding: 10px 20px; margin: 5px; background: #2196F3; color: white; border: none; cursor: pointer; }
+        button:hover { background: #1976D2; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Teste de Conectividade Supabase</h1>
+    
+    <div>
+        <button onclick="testarConexao()">🔌 Testar Conexão</button>
+        <button onclick="carregarTickets()">🎫 Carregar Tickets</button>
+        <button onclick="testarAuth()">🔐 Testar Auth</button>
+        <button onclick="criarTicketTeste()">➕ Criar Ticket Teste</button>
+        <button onclick="testarStorage()">📎 Testar Storage</button>
+        <button onclick="listarAnexos()">📁 Listar Anexos</button>
+        <button onclick="testarCriacaoTicketSimples()">🎫 Criar Ticket Simples</button>
+    </div>
+
+    <div>
+        <h3>Teste de Upload de Anexo</h3>
+        <input type="file" id="fileInput" accept="image/*,.pdf,.doc,.docx,.txt">
+        <button onclick="testarUploadAnexo()">📤 Upload Teste</button>
+    </div>
+
+    <div id="resultados"></div>
+
+    <script>
+        // Configurar Supabase com as credenciais corretas
+        const SUPABASE_URL = "https://tjjpwsjrmoisowewebcs.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqanB3c2pybW9pc293ZXdlYmNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTE0OTA5MTMsImV4cCI6MjA2NzA2NjkxM30.hcBhJ96I5WGmacQswHkb5O-3wymLo50QQ1zPLnTbsI8";
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        function adicionarResultado(texto, sucesso = true) {
+            const div = document.createElement('div');
+            div.className = `resultado ${sucesso ? 'sucesso' : 'erro'}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${texto}`;
+            document.getElementById('resultados').insertBefore(div, document.getElementById('resultados').firstChild);
+        }
+
+        async function testarConexao() {
+            adicionarResultado('🔄 Testando conexão com Supabase...');
+            try {
+                const { data, error } = await supabase
+                    .from('tickets')
+                    .select('count', { count: 'exact' })
+                    .limit(1);
+
+                if (error) {
+                    adicionarResultado(`❌ Erro na conexão: ${error.message}`, false);
+                } else {
+                    adicionarResultado(`✅ Conexão OK! Tickets no banco: ${data?.length || 'N/A'}`);
+                }
+            } catch (err) {
+                adicionarResultado(`💥 Erro inesperado: ${err.message}`, false);
+            }
+        }
+
+        async function carregarTickets() {
+            adicionarResultado('🔄 Carregando tickets...');
+            try {
+                const { data: tickets, error } = await supabase
+                    .from('tickets')
+                    .select(`
+                        id,
+                        ticket_number,
+                        subject,
+                        status,
+                        priority,
+                        department,
+                        created_at
+                    `)
+                    .order('created_at', { ascending: false })
+                    .limit(5);
+
+                if (error) {
+                    adicionarResultado(`❌ Erro ao carregar tickets: ${error.message}`, false);
+                } else {
+                    const ticketsTexto = tickets.map(t => 
+                        `${t.ticket_number}: ${t.subject} (${t.status})`
+                    ).join('<br>');
+                    adicionarResultado(`✅ ${tickets.length} tickets carregados:<br>${ticketsTexto}`);
+                }
+            } catch (err) {
+                adicionarResultado(`💥 Erro inesperado: ${err.message}`, false);
+            }
+        }
+
+        async function testarAuth() {
+            adicionarResultado('🔄 Testando estado de autenticação...');
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                
+                if (error) {
+                    adicionarResultado(`❌ Erro de autenticação: ${error.message}`, false);
+                } else if (session) {
+                    adicionarResultado(`✅ Usuário logado: ${session.user.email}`);
+                } else {
+                    adicionarResultado(`ℹ️ Nenhum usuário logado`);
+                }
+            } catch (err) {
+                adicionarResultado(`💥 Erro inesperado: ${err.message}`, false);
+            }
+        }
+
+        async function criarTicketTeste() {
+            adicionarResultado('🔄 Tentando criar ticket de teste...');
+            try {
+                // Primeiro obter usuário logado
+                const { data: { user } } = await supabase.auth.getUser();
+                
+                if (!user) {
+                    adicionarResultado('❌ Usuário não está logado. Faça login primeiro.', false);
+                    return;
+                }
+
+                const { data, error } = await supabase
+                    .from('tickets')
+                    .insert([{
+                        subject: '🧪 Teste HTML - ' + new Date().toLocaleTimeString(),
+                        description: 'Ticket criado via teste HTML para verificar conectividade',
+                        priority: 'medium',
+                        department: 'TI',
+                        customer_id: user.id,
+                        status: 'open'
+                    }])
+                    .select();
+
+                if (error) {
+                    adicionarResultado(`❌ Erro ao criar ticket: ${error.message}`, false);
+                } else {
+                    adicionarResultado(`✅ Ticket criado: ${data[0]?.ticket_number || 'ID não disponível'}`);
+                }
+            } catch (err) {
+                adicionarResultado(`💥 Erro inesperado: ${err.message}`, false);
+            }
+        }
+
+        async function testarStorage() {
+            adicionarResultado('🔄 Testando sistema de storage...');
+            try {
+                // Testar se o bucket ticket-attachments existe
+                const { data, error } = await supabase.storage
+                    .from('ticket-attachments')
+                    .list('', { limit: 1 });
+
+                if (error) {
+                    adicionarResultado(`❌ Bucket ticket-attachments não encontrado: ${error.message}`, false);
+                    
+                    // Tentar criar o bucket
+                    adicionarResultado('🔄 Tentando criar bucket ticket-attachments...');
+                    const { data: bucketData, error: bucketError } = await supabase.storage
+                        .createBucket('ticket-attachments', { public: false });
+                    
+                    if (bucketError) {
+                        adicionarResultado(`❌ Erro ao criar bucket: ${bucketError.message}`, false);
+                    } else {
+                        adicionarResultado(`✅ Bucket criado com sucesso!`);
+                    }
+                } else {
+                    adicionarResultado(`✅ Bucket ticket-attachments existe e está configurado!`);
+                }
+            } catch (err) {
+                adicionarResultado(`💥 Erro inesperado: ${err.message}`, false);
+            }
+        }
+
+        async function listarAnexos() {
+            adicionarResultado('🔄 Listando anexos no banco de dados...');
+            try {
+                const { data: anexos, error } = await supabase
+                    .from('ticket_attachments')
+                    .select(`
+                        id,
+                        file_name,
+                        file_size,
+                        file_type,
+                        created_at,
+                        ticket_id
+                    `)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+
+                if (error) {
+                    adicionarResultado(`❌ Erro ao listar anexos: ${error.message}`, false);
+                } else {
+                    if (anexos.length === 0) {
+                        adicionarResultado(`ℹ️ Nenhum anexo encontrado no banco de dados`);
+                    } else {
+                        const anexosTexto = anexos.map(a => 
+                            `${a.file_name} (${Math.round(a.file_size / 1024)}KB) - Ticket ID: ${a.ticket_id}`
+                        ).join('<br>');
+                        adicionarResultado(`✅ ${anexos.length} anexos encontrados:<br>${anexosTexto}`);
+                    }
+                }
+            } catch (err) {
+                adicionarResultado(`💥 Erro inesperado: ${err.message}`, false);
+            }
+        }
+
+        async function testarUploadAnexo() {
+            adicionarResultado('🔄 Tentando fazer upload de anexo de teste...');
+            try {
+                const file = document.getElementById('fileInput').files[0];
+                if (!file) {
+                    adicionarResultado('❌ Nenhum arquivo selecionado', false);
+                    return;
+                }
+
+                // Verificar se o usuário está logado
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) {
+                    adicionarResultado('❌ Usuário não está logado. Faça login primeiro.', false);
+                    return;
+                }
+
+                // Gerar nome único para o arquivo
+                const timestamp = new Date().getTime();
+                const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+                const fileName = `teste/${user.id}/${timestamp}_${sanitizedFileName}`;
+
+                // Upload para o Supabase Storage
+                const { data: uploadData, error: uploadError } = await supabase.storage
+                    .from('ticket-attachments')
+                    .upload(fileName, file, {
+                        cacheControl: '3600',
+                        upsert: false
+                    });
+
+                if (uploadError) {
+                    adicionarResultado(`❌ Erro ao fazer upload: ${uploadError.message}`, false);
+                } else {
+                    adicionarResultado(`✅ Upload realizado com sucesso! Arquivo: ${fileName}`);
+                    
+                    // Tentar criar registro na tabela de anexos (simulando)
+                    adicionarResultado('🔄 Criando registro de anexo no banco...');
+                    const { data: attachmentData, error: attachmentError } = await supabase
+                        .from('ticket_attachments')
+                        .insert({
+                            ticket_id: '00000000-0000-0000-0000-000000000000', // ID fictício para teste
+                            file_name: file.name,
+                            file_url: fileName,
+                            file_size: file.size,
+                            file_type: file.type,
+                            uploaded_by: user.id
+                        })
+                        .select()
+                        .single();
+
+                    if (attachmentError) {
+                        adicionarResultado(`⚠️ Upload OK, mas erro ao salvar no banco: ${attachmentError.message}`, false);
+                    } else {
+                        adicionarResultado(`✅ Anexo registrado no banco com ID: ${attachmentData.id}`);
+                    }
+                }
+            } catch (err) {
+                adicionarResultado(`💥 Erro inesperado: ${err.message}`, false);
+            }
+        }
+
+        async function testarCriacaoTicketSimples() {
+            adicionarResultado('🔄 Testando criação simples de ticket...');
+            try {
+                // Primeiro obter usuário logado
+                const { data: { user } } = await supabase.auth.getUser();
+                
+                if (!user) {
+                    adicionarResultado('❌ Usuário não está logado. Faça login primeiro.', false);
+                    return;
+                }
+
+                // Criar ticket com dados mínimos
+                const { data, error } = await supabase
+                    .from('tickets')
+                    .insert({
+                        subject: '🧪 Teste Simples - ' + new Date().toLocaleTimeString(),
+                        description: 'Ticket de teste criado para verificar funcionamento básico',
+                        priority: 'medium',
+                        department: 'TI',
+                        customer_id: user.id,
+                        status: 'open'
+                    })
+                    .select('*')
+                    .single();
+
+                if (error) {
+                    adicionarResultado(`❌ Erro ao criar ticket simples: ${error.message}`, false);
+                    console.error('Erro detalhado:', error);
+                } else {
+                    adicionarResultado(`✅ Ticket simples criado com sucesso!`);
+                    adicionarResultado(`📋 ID: ${data.id}`);
+                    adicionarResultado(`🎫 Número: ${data.ticket_number || 'Não gerado'}`);
+                    adicionarResultado(`📝 Assunto: ${data.subject}`);
+                }
+            } catch (err) {
+                adicionarResultado(`💥 Erro inesperado: ${err.message}`, false);
+                console.error('Erro completo:', err);
+            }
+        }
+
+        // Testar conexão automaticamente ao carregar
+        window.onload = function() {
+            adicionarResultado('🚀 Página carregada! Clique nos botões para testar.');
+            testarConexao();
+        };
+    </script>
+</body>
+</html> 

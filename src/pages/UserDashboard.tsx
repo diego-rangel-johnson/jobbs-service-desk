@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,7 +14,7 @@ import TicketsList from "@/components/TicketsList";
 import UserDashboardMetrics from "@/components/UserDashboardMetrics";
 import UserTicketReports from "@/components/UserTicketReports";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart, List, Plus, FileText } from "lucide-react";
+import { BarChart, List, Plus, FileText, Ticket as TicketIcon, Clock, Eye } from "lucide-react";
 import { useTickets } from "@/hooks/useTickets";
 
 const UserDashboard = () => {
@@ -19,7 +22,10 @@ const UserDashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [showNewTicket, setShowNewTicket] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
+  const [ticketForDialog, setTicketForDialog] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [isMobile, setIsMobile] = useState(false);
   
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -28,6 +34,18 @@ const UserDashboard = () => {
   
   // Usar dados do Supabase Auth quando disponível, fallback para localStorage
   const userName = user?.user_metadata?.name || user?.email || localStorage.getItem("userName") || "Usuário";
+
+  // Detectar se é mobile
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+    };
+
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+    
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
 
   // Redirecionar administradores e supervisores para suas respectivas telas
   useEffect(() => {
@@ -86,6 +104,46 @@ const UserDashboard = () => {
       case "low":
       case "baixa": return "bg-green-500";
       default: return "bg-gray-500";
+    }
+  };
+
+  const getPriorityBadgeColor = (priority: string) => {
+    switch (priority) {
+      case "urgent": return "bg-red-600 text-white";
+      case "high": return "bg-red-500 text-white";
+      case "medium": return "bg-yellow-500 text-white";
+      case "low": return "bg-green-500 text-white";
+      default: return "bg-gray-500 text-white";
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "open": return "Aberto";
+      case "in_progress": return "Em Andamento";
+      case "resolved": return "Resolvido";
+      case "closed": return "Fechado";
+      default: return status;
+    }
+  };
+
+  const getPriorityLabel = (priority: string) => {
+    switch (priority) {
+      case "urgent": return "Urgente";
+      case "high": return "Alta";
+      case "medium": return "Média";
+      case "low": return "Baixa";
+      default: return priority;
+    }
+  };
+
+  // Função para visualizar ticket em popup (mobile) ou sidebar (desktop)
+  const handleViewTicket = (ticket: any) => {
+    if (isMobile) {
+      setTicketForDialog(ticket);
+      setShowViewDialog(true);
+    } else {
+      setSelectedTicket(ticket);
     }
   };
 
@@ -193,14 +251,14 @@ const UserDashboard = () => {
                 setSearchTerm={setSearchTerm}
                 filteredTickets={filteredTickets}
                 selectedTicket={selectedTicket}
-                setSelectedTicket={setSelectedTicket}
+                setSelectedTicket={handleViewTicket}
                 setShowNewTicket={setShowNewTicket}
                 getStatusColor={getStatusColor}
                 getPriorityColor={getPriorityColor}
               />
 
-              {/* Ticket Details Sidebar */}
-              <div className="lg:col-span-1">
+              {/* Ticket Details Sidebar - apenas no desktop */}
+              <div className="lg:col-span-1 hidden lg:block">
                 {selectedTicket ? (
                   <TicketDetails ticket={selectedTicket} />
                 ) : (
@@ -225,6 +283,172 @@ const UserDashboard = () => {
         onOpenChange={setShowNewTicket}
         onSubmit={addNewTicket}
       />
+
+      {/* Dialog para visualização de ticket no mobile */}
+      <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden p-0">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <TicketIcon className="h-5 w-5" />
+              Detalhes do Ticket
+              {ticketForDialog && (
+                <Badge variant="outline" className="ml-2">
+                  {ticketForDialog.ticket_number || ticketForDialog.id}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {ticketForDialog && (
+            <div className="px-6 py-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+              {/* Header do Ticket */}
+              <div className="mb-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                      {ticketForDialog.subject}
+                    </h2>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <Badge className={getPriorityBadgeColor(ticketForDialog.priority)}>
+                        {getPriorityLabel(ticketForDialog.priority)}
+                      </Badge>
+                      <Badge variant="secondary" className={getStatusColor(ticketForDialog.status)}>
+                        {getStatusLabel(ticketForDialog.status)}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Informações do Ticket */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Cliente:</span>
+                    <p className="text-sm text-gray-900">{ticketForDialog.customer?.name || ticketForDialog.customer || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Departamento:</span>
+                    <p className="text-sm text-gray-900">{ticketForDialog.department}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Criado em:</span>
+                    <p className="text-sm text-gray-900">
+                      {new Date(ticketForDialog.created_at || ticketForDialog.date).toLocaleDateString('pt-BR')}
+                    </p>
+                  </div>
+                  {ticketForDialog.assignee && ticketForDialog.assignee !== 'Não atribuído' && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-600">Responsável:</span>
+                      <p className="text-sm text-gray-900">{ticketForDialog.assignee?.name || ticketForDialog.assignee}</p>
+                    </div>
+                  )}
+                  {ticketForDialog.estimated_date && (
+                    <div>
+                      <span className="text-sm font-medium text-gray-600">Previsão:</span>
+                      <p className="text-sm text-gray-900">
+                        {new Date(ticketForDialog.estimated_date).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                  )}
+                  <div>
+                    <span className="text-sm font-medium text-gray-600">Última atualização:</span>
+                    <p className="text-sm text-gray-900">
+                      {new Date(ticketForDialog.updated_at || ticketForDialog.created_at || ticketForDialog.date).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Descrição */}
+              <div className="mb-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-3">Descrição</h3>
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                    {ticketForDialog.description || 'Nenhuma descrição fornecida.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Timeline/Histórico */}
+              <div className="mb-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Histórico do Ticket
+                </h3>
+                <div className="space-y-3">
+                  {/* Evento de criação */}
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-gray-900">Sistema</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(ticketForDialog.created_at || ticketForDialog.date).toLocaleString('pt-BR')}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600">Ticket criado</p>
+                    </div>
+                  </div>
+
+                  {/* Eventos de atualização (se houver) */}
+                  {ticketForDialog.updates && ticketForDialog.updates.length > 0 && (
+                    ticketForDialog.updates.map((update: any, index: number) => (
+                      <div key={index} className="flex gap-3">
+                        <div className="flex-shrink-0 w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-gray-900">
+                              {update.user || update.name || 'Sistema'}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {update.date || new Date(update.created_at || Date.now()).toLocaleString('pt-BR')}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600">{update.message}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {/* Estado atual */}
+                  <div className="flex gap-3">
+                    <div className="flex-shrink-0 w-2 h-2 bg-gray-400 rounded-full mt-2"></div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-gray-900">Estado atual</span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(ticketForDialog.updated_at || ticketForDialog.created_at || ticketForDialog.date).toLocaleString('pt-BR')}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Status: {getStatusLabel(ticketForDialog.status)} • 
+                        Prioridade: {getPriorityLabel(ticketForDialog.priority)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ações */}
+              <div className="border-t pt-4">
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-gray-600">
+                    Visualizando detalhes do ticket
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setShowViewDialog(false)}
+                    >
+                      Fechar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

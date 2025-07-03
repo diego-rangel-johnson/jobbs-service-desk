@@ -19,6 +19,7 @@ import {
   CheckCircle
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UserOpenTicketsReportProps {
   tickets: any[];
@@ -26,12 +27,17 @@ interface UserOpenTicketsReportProps {
 }
 
 const UserOpenTicketsReport: React.FC<UserOpenTicketsReportProps> = ({ tickets, userName }) => {
-  // Filtrar apenas tickets abertos do usuário
+  // Obter user ID para filtragem correta
+  const { user } = useAuth();
+
+  // Filtrar apenas tickets abertos do usuário usando customer_id
   const userOpenTickets = useMemo(() => {
+    if (!user) return [];
     return tickets.filter(ticket => 
-      ticket.customer === userName && ticket.status === "aberto"
+      (ticket.customer_id === user.id || ticket.customer?.user_id === user.id) && 
+      (ticket.status === "open" || ticket.status === "aberto")
     );
-  }, [tickets, userName]);
+  }, [tickets, user]);
 
   // Estatísticas dos tickets abertos do usuário
   const userOpenStats = useMemo(() => {

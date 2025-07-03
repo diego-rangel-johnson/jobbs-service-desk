@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import UserOpenTicketsReport from "./UserOpenTicketsReport";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UserTicketReportsProps {
   tickets: any[];
@@ -34,10 +35,17 @@ const UserTicketReports: React.FC<UserTicketReportsProps> = ({ tickets, userName
   const [timeFilter, setTimeFilter] = useState("30"); // dias
   const [departmentFilter, setDepartmentFilter] = useState("todos");
 
-  // Filtrar apenas tickets do usuário
+  // Obter user ID para filtragem correta
+  const { user } = useAuth();
+
+  // Filtrar apenas tickets do usuário usando customer_id
   const userTickets = useMemo(() => {
-    return tickets.filter(ticket => ticket.customer === userName);
-  }, [tickets, userName]);
+    if (!user) return [];
+    return tickets.filter(ticket => 
+      ticket.customer_id === user.id || 
+      ticket.customer?.user_id === user.id
+    );
+  }, [tickets, user]);
 
   // Filtrar tickets por período
   const filteredTickets = useMemo(() => {
@@ -46,7 +54,8 @@ const UserTicketReports: React.FC<UserTicketReportsProps> = ({ tickets, userName
     const filterDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
 
     return userTickets.filter(ticket => {
-      const ticketDate = new Date(ticket.date);
+      // Usar created_at se disponível, senão usar date como fallback
+      const ticketDate = new Date(ticket.created_at || ticket.date);
       const matchesTime = ticketDate >= filterDate;
       const matchesDepartment = departmentFilter === "todos" || ticket.department === departmentFilter;
       

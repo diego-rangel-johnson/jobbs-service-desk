@@ -11,8 +11,10 @@ import {
   Target,
   Activity,
   Zap,
-  Timer
+  Timer,
+  User
 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UserDashboardMetricsProps {
   tickets: any[];
@@ -20,10 +22,17 @@ interface UserDashboardMetricsProps {
 }
 
 const UserDashboardMetrics: React.FC<UserDashboardMetricsProps> = ({ tickets, userName }) => {
-  // Filtrar tickets do usuário
+  // Obter user ID para filtragem correta
+  const { user } = useAuth();
+
+  // Filtrar tickets do usuário usando customer_id
   const userTickets = useMemo(() => {
-    return tickets.filter(ticket => ticket.customer === userName);
-  }, [tickets, userName]);
+    if (!user) return [];
+    return tickets.filter(ticket => 
+      ticket.customer_id === user.id || 
+      ticket.customer?.user_id === user.id
+    );
+  }, [tickets, user]);
 
   // Estatísticas do usuário
   const userStats = useMemo(() => {

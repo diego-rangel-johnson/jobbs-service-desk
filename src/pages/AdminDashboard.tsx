@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Search, User, Bell, LogOut, BarChart, Clock, AlertTriangle, CheckCircle, ChevronDown, Settings, UserPlus, Eye, Edit3 } from "lucide-react";
+import { Search, User, Bell, LogOut, BarChart, Clock, AlertTriangle, CheckCircle, ChevronDown, Settings, UserPlus, Eye, Edit3, Trash2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import TicketViewDialog from "@/components/TicketViewDialog";
 import TicketEditDialog from "@/components/TicketEditDialog";
@@ -20,7 +20,7 @@ const AdminDashboard = () => {
   const [statusFilter, setStatusFilter] = useState("todos");
   const [priorityFilter, setPriorityFilter] = useState("todas");
   const [departmentFilter, setDepartmentFilter] = useState("todos");
-  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedTicket, setSelectedTicket] = useState<any>(null);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAddUserDialog, setShowAddUserDialog] = useState(false);
@@ -272,6 +272,44 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleDeleteTicket = async (ticket: any) => {
+    try {
+      // Confirmar se o usuário realmente deseja deletar
+      const confirmDelete = window.confirm(
+        `Tem certeza de que deseja deletar o ticket ${ticket.id}?\n\nAssunto: ${ticket.subject}\n\nEsta ação não pode ser desfeita.`
+      );
+
+      if (!confirmDelete) {
+        return;
+      }
+
+      console.log('🗑️ Deletando ticket:', ticket.id);
+
+      // Deletar o ticket do banco de dados
+      const { error } = await supabase
+        .from('tickets')
+        .delete()
+        .eq('id', ticket.rawData.id);
+
+      if (error) {
+        console.error('Erro ao deletar ticket:', error);
+        alert('Erro ao deletar o ticket. Tente novamente.');
+        return;
+      }
+
+      console.log(`✅ Ticket ${ticket.id} deletado com sucesso`);
+      
+      // Recarregar os tickets para refletir as mudanças
+      await loadTicketsFromSupabase();
+      
+      alert('Ticket deletado com sucesso!');
+
+    } catch (error) {
+      console.error('Erro inesperado ao deletar ticket:', error);
+      alert('Erro inesperado ao deletar o ticket. Tente novamente.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -520,6 +558,16 @@ const AdminDashboard = () => {
                           >
                             <Eye className="h-3 w-3" />
                             <span className="hidden sm:inline ml-1">Ver</span>
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDeleteTicket(ticket)}
+                            className="text-xs h-6 px-1 min-w-fit text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Deletar ticket"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span className="hidden sm:inline ml-1">Deletar</span>
                           </Button>
                         </div>
                       </TableCell>

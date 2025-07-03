@@ -122,28 +122,40 @@ const UserDashboardMetrics: React.FC<UserDashboardMetricsProps> = ({ tickets, us
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "aberto": return "bg-red-100 text-red-800 border-red-200";
-      case "em_andamento": return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "resolvido": return "bg-green-100 text-green-800 border-green-200";
-      case "fechado": return "bg-gray-100 text-gray-800 border-gray-200";
+      case "aberto":
+      case "open": return "bg-red-100 text-red-800 border-red-200";
+      case "em_andamento":
+      case "in_progress": return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "resolvido":
+      case "resolved": return "bg-green-100 text-green-800 border-green-200";
+      case "fechado":
+      case "closed": return "bg-gray-100 text-gray-800 border-gray-200";
       default: return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "alta": return "bg-red-500";
-      case "media": return "bg-yellow-500";
-      case "baixa": return "bg-green-500";
+      case "alta":
+      case "high":
+      case "urgent": return "bg-red-500";
+      case "media":
+      case "medium": return "bg-yellow-500";
+      case "baixa":
+      case "low": return "bg-green-500";
       default: return "bg-gray-500";
     }
   };
 
   const getPriorityIcon = (priority: string) => {
     switch (priority) {
-      case "alta": return <Zap className="h-4 w-4 text-red-500" />;
-      case "media": return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      case "baixa": return <Clock className="h-4 w-4 text-green-500" />;
+      case "alta":
+      case "high":
+      case "urgent": return <Zap className="h-4 w-4 text-red-500" />;
+      case "media":
+      case "medium": return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+      case "baixa":
+      case "low": return <Clock className="h-4 w-4 text-green-500" />;
       default: return <Clock className="h-4 w-4 text-gray-500" />;
     }
   };
@@ -343,31 +355,75 @@ const UserDashboardMetrics: React.FC<UserDashboardMetricsProps> = ({ tickets, us
         <CardContent>
           <div className="space-y-3">
             {recentTickets.map((ticket) => (
-              <div key={ticket.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
+              <div key={ticket.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200">
+                {/* Mobile Layout */}
+                <div className="flex items-start gap-3 w-full">
+                  <div className="flex-shrink-0 flex items-center gap-2">
                     {getPriorityIcon(ticket.priority)}
-                    <span className="font-mono text-xs text-gray-600">{ticket.id}</span>
+                    <div className={`w-2 h-2 rounded-full ${getPriorityColor(ticket.priority)} sm:hidden`}></div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 truncate max-w-xs">
+                  
+                  <div className="flex-1 min-w-0">
+                    {/* Ticket ID e Subject */}
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-mono text-xs text-gray-600 bg-gray-200 px-2 py-1 rounded">
+                        #{ticket.ticket_number || ticket.id}
+                      </span>
+                      <Badge variant="secondary" className={`text-xs ${getStatusColor(ticket.status)}`}>
+                        {ticket.status === "aberto" || ticket.status === "open" ? "Aberto" :
+                         ticket.status === "em_andamento" || ticket.status === "in_progress" ? "Em Andamento" :
+                         ticket.status === "resolvido" || ticket.status === "resolved" ? "Resolvido" : "Fechado"}
+                      </Badge>
+                    </div>
+                    
+                    {/* Subject */}
+                    <p className="text-sm font-medium text-gray-900 mb-2 line-clamp-2">
                       {ticket.subject}
                     </p>
-                    <p className="text-xs text-gray-500">
-                      {new Date(ticket.created_at || ticket.date).toLocaleDateString('pt-BR')} • {ticket.department}
-                    </p>
+                    
+                    {/* Metadata */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs text-gray-500">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        <span>{new Date(ticket.created_at || ticket.date).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                      
+                      {ticket.department && (
+                        <div className="flex items-center gap-1">
+                          <span className="hidden sm:inline">•</span>
+                          <span>{ticket.department}</span>
+                        </div>
+                      )}
+                      
+                      {ticket.customer && (
+                        <div className="flex items-center gap-1">
+                          <span className="hidden sm:inline">•</span>
+                          <User className="h-3 w-3" />
+                          <span className="truncate max-w-24">
+                            {ticket.customer?.name || ticket.customer}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className={`text-xs ${getStatusColor(ticket.status)}`}>
-                    {ticket.status === "aberto" ? "Aberto" :
-                     ticket.status === "em_andamento" ? "Em Andamento" :
-                     ticket.status === "resolvido" ? "Resolvido" : "Fechado"}
-                  </Badge>
-                  <div className={`w-2 h-2 rounded-full ${getPriorityColor(ticket.priority)}`}></div>
+                  
+                  {/* Priority indicator for desktop */}
+                  <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
+                    <div className={`w-2 h-2 rounded-full ${getPriorityColor(ticket.priority)}`}></div>
+                  </div>
                 </div>
               </div>
             ))}
+            
+            {recentTickets.length === 0 && (
+              <div className="text-center py-8">
+                <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500 text-sm">Nenhum ticket recente encontrado</p>
+                <p className="text-gray-400 text-xs mt-1">
+                  Seus tickets aparecerão aqui quando forem criados
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

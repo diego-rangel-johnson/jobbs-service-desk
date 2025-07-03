@@ -147,10 +147,25 @@ const AdminDashboard = () => {
   const handleLogout = async () => {
     try {
       console.log('🚪 Iniciando logout admin...');
+      console.log('📊 Estado atual do usuário:', user);
+      console.log('🔧 Função signOut disponível:', typeof signOut);
+      
+      if (!signOut) {
+        console.error('❌ signOut function not available');
+        alert('Erro: função de logout não disponível');
+        return;
+      }
+      
       await signOut();
+      console.log('✅ signOut executado com sucesso');
+      
+      console.log('🔄 Redirecionando para /auth...');
       navigate("/auth");
+      console.log('✅ Redirecionamento iniciado');
+      
     } catch (error) {
       console.error('❌ Erro no logout:', error);
+      alert('Erro ao fazer logout: ' + error.message);
     }
   };
 

@@ -578,7 +578,7 @@ const AdminDashboard = () => {
                             variant="ghost" 
                             size="sm"
                             onClick={() => handleDeleteTicket(ticket)}
-                            className="text-xs h-6 px-1 min-w-fit text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-xs h-6 px-1 min-w-fit text-primary hover:text-primary/80 hover:bg-primary/10"
                             title="Deletar ticket"
                           >
                             <Trash2 className="h-3 w-3" />

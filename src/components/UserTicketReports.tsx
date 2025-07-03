@@ -38,14 +38,24 @@ const UserTicketReports: React.FC<UserTicketReportsProps> = ({ tickets, userName
   // Obter user ID para filtragem correta
   const { user } = useAuth();
 
-  // Filtrar apenas tickets do usuário usando customer_id
+  // Filtrar apenas tickets do usuário usando customer_id (Supabase) ou customer (localStorage)
   const userTickets = useMemo(() => {
-    if (!user) return [];
-    return tickets.filter(ticket => 
-      ticket.customer_id === user.id || 
-      ticket.customer?.user_id === user.id
-    );
-  }, [tickets, user]);
+    if (!user && !userName) return [];
+    
+    return tickets.filter(ticket => {
+      // Suporte para dados do Supabase
+      if (user && (ticket.customer_id === user.id || ticket.customer?.user_id === user.id)) {
+        return true;
+      }
+      
+      // Suporte para dados do localStorage (fallback)
+      if (ticket.customer === userName) {
+        return true;
+      }
+      
+      return false;
+    });
+  }, [tickets, user, userName]);
 
   // Filtrar tickets por período
   const filteredTickets = useMemo(() => {
@@ -54,7 +64,7 @@ const UserTicketReports: React.FC<UserTicketReportsProps> = ({ tickets, userName
     const filterDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
 
     return userTickets.filter(ticket => {
-      // Usar created_at se disponível, senão usar date como fallback
+      // Usar created_at se disponível (Supabase), senão usar date (localStorage)
       const ticketDate = new Date(ticket.created_at || ticket.date);
       const matchesTime = ticketDate >= filterDate;
       const matchesDepartment = departmentFilter === "todos" || ticket.department === departmentFilter;
@@ -63,17 +73,20 @@ const UserTicketReports: React.FC<UserTicketReportsProps> = ({ tickets, userName
     });
   }, [userTickets, timeFilter, departmentFilter]);
 
-  // Estatísticas do usuário
+  // Estatísticas do usuário (com normalização de status e prioridade)
   const userStats = useMemo(() => {
     const total = filteredTickets.length;
-    const abertos = filteredTickets.filter(t => t.status === "aberto").length;
-    const emAndamento = filteredTickets.filter(t => t.status === "em_andamento").length;
-    const resolvidos = filteredTickets.filter(t => t.status === "resolvido").length;
-    const fechados = filteredTickets.filter(t => t.status === "fechado").length;
     
-    const alta = filteredTickets.filter(t => t.priority === "alta").length;
-    const media = filteredTickets.filter(t => t.priority === "media").length;
-    const baixa = filteredTickets.filter(t => t.priority === "baixa").length;
+    // Normalizar status para suportar ambos os formatos
+    const abertos = filteredTickets.filter(t => t.status === "aberto" || t.status === "open").length;
+    const emAndamento = filteredTickets.filter(t => t.status === "em_andamento" || t.status === "in_progress").length;
+    const resolvidos = filteredTickets.filter(t => t.status === "resolvido" || t.status === "resolved").length;
+    const fechados = filteredTickets.filter(t => t.status === "fechado" || t.status === "closed").length;
+    
+    // Normalizar prioridade para suportar ambos os formatos
+    const alta = filteredTickets.filter(t => t.priority === "alta" || t.priority === "high" || t.priority === "urgent").length;
+    const media = filteredTickets.filter(t => t.priority === "media" || t.priority === "medium").length;
+    const baixa = filteredTickets.filter(t => t.priority === "baixa" || t.priority === "low").length;
 
     // Taxa de resolução
     const taxaResolucao = total > 0 ? ((resolvidos + fechados) / total * 100).toFixed(1) : "0";
@@ -83,7 +96,10 @@ const UserTicketReports: React.FC<UserTicketReportsProps> = ({ tickets, userName
     
     // Tickets recentes (últimos 7 dias)
     const sevenDaysAgo = new Date(new Date().getTime() - 7 * 24 * 60 * 60 * 1000);
-    const ticketsRecentes = filteredTickets.filter(t => new Date(t.date) >= sevenDaysAgo).length;
+    const ticketsRecentes = filteredTickets.filter(t => {
+      const ticketDate = new Date(t.created_at || t.date);
+      return ticketDate >= sevenDaysAgo;
+    }).length;
     
     return {
       total,
@@ -118,7 +134,7 @@ const UserTicketReports: React.FC<UserTicketReportsProps> = ({ tickets, userName
     }).sort((a, b) => b.total - a.total);
   }, [filteredTickets]);
 
-  // Histórico mensal dos últimos 6 meses
+  // Histórico mensal dos últimos 6 meses (com normalização de data)
   const monthlyHistory = useMemo(() => {
     const months = Array.from({ length: 6 }, (_, i) => {
       const date = new Date();
@@ -134,15 +150,15 @@ const UserTicketReports: React.FC<UserTicketReportsProps> = ({ tickets, userName
       const monthEnd = new Date(fullDate.getFullYear(), fullDate.getMonth() + 1, 0);
       
       const monthTickets = userTickets.filter(ticket => {
-        const ticketDate = new Date(ticket.date);
+        const ticketDate = new Date(ticket.created_at || ticket.date);
         return ticketDate >= monthStart && ticketDate <= monthEnd;
       });
 
       return {
         month,
         total: monthTickets.length,
-        abertos: monthTickets.filter(t => t.status === "aberto").length,
-        resolvidos: monthTickets.filter(t => t.status === "resolvido" || t.status === "fechado").length
+        abertos: monthTickets.filter(t => t.status === "aberto" || t.status === "open").length,
+        resolvidos: monthTickets.filter(t => t.status === "resolvido" || t.status === "resolved" || t.status === "fechado" || t.status === "closed").length
       };
     });
   }, [userTickets]);

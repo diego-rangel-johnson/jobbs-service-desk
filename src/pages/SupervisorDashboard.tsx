@@ -424,34 +424,36 @@ const SupervisorDashboard = () => {
                         className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50 transition-colors cursor-pointer"
                         onClick={() => handleViewTicket(ticket)}
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
                           <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
                               <h3 className="font-medium text-slate-900">
                                 {ticket.ticket_number} - {ticket.subject}
                               </h3>
-                              <Badge className={getPriorityColor(ticket.priority)}>
-                                {ticket.priority === 'urgent' ? 'Urgente' :
-                                 ticket.priority === 'high' ? 'Alta' :
-                                 ticket.priority === 'medium' ? 'Média' : 'Baixa'}
-                              </Badge>
-                              <Badge variant="secondary" className={getStatusColor(ticket.status)}>
-                                {getStatusLabel(ticket.status)}
-                              </Badge>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Badge className={getPriorityColor(ticket.priority)}>
+                                  {ticket.priority === 'urgent' ? 'Urgente' :
+                                   ticket.priority === 'high' ? 'Alta' :
+                                   ticket.priority === 'medium' ? 'Média' : 'Baixa'}
+                                </Badge>
+                                <Badge variant="secondary" className={getStatusColor(ticket.status)}>
+                                  {getStatusLabel(ticket.status)}
+                                </Badge>
+                              </div>
                             </div>
                             <p className="text-sm text-slate-600 mb-2 line-clamp-2">{ticket.description}</p>
-                            <div className="flex items-center gap-4 text-xs text-slate-500">
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs text-slate-500">
                               <span>Cliente: {ticket.customer?.name || 'N/A'}</span>
                               <span>Departamento: {ticket.department}</span>
                               <span>Criado: {new Date(ticket.created_at).toLocaleDateString('pt-BR')}</span>
                               {ticket.customer_id === user?.id && (
-                                <Badge variant="outline" className="text-green-600 border-green-600">
+                                <Badge variant="outline" className="text-green-600 border-green-600 w-fit">
                                   Meu Ticket
                                 </Badge>
                               )}
                             </div>
                           </div>
-                          <div className="ml-4">
+                          <div className="flex justify-end lg:justify-start lg:ml-4">
                             <Button
                               variant="outline"
                               size="sm"
@@ -459,6 +461,7 @@ const SupervisorDashboard = () => {
                                 e.stopPropagation();
                                 handleViewTicket(ticket);
                               }}
+                              className="w-full sm:w-auto"
                             >
                               <Eye className="h-4 w-4 mr-2" />
                               Ver Detalhes

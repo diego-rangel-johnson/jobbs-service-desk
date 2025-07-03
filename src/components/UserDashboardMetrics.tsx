@@ -25,26 +25,39 @@ const UserDashboardMetrics: React.FC<UserDashboardMetricsProps> = ({ tickets, us
   // Obter user ID para filtragem correta
   const { user } = useAuth();
 
-  // Filtrar tickets do usuário usando customer_id
+  // Filtrar tickets do usuário usando customer_id (Supabase) ou customer (localStorage)
   const userTickets = useMemo(() => {
-    if (!user) return [];
-    return tickets.filter(ticket => 
-      ticket.customer_id === user.id || 
-      ticket.customer?.user_id === user.id
-    );
-  }, [tickets, user]);
+    if (!user && !userName) return [];
+    
+    return tickets.filter(ticket => {
+      // Suporte para dados do Supabase
+      if (user && (ticket.customer_id === user.id || ticket.customer?.user_id === user.id)) {
+        return true;
+      }
+      
+      // Suporte para dados do localStorage (fallback)
+      if (ticket.customer === userName) {
+        return true;
+      }
+      
+      return false;
+    });
+  }, [tickets, user, userName]);
 
-  // Estatísticas do usuário
+  // Estatísticas do usuário (com normalização de status e prioridade)
   const userStats = useMemo(() => {
     const total = userTickets.length;
-    const abertos = userTickets.filter(t => t.status === "aberto").length;
-    const emAndamento = userTickets.filter(t => t.status === "em_andamento").length;
-    const resolvidos = userTickets.filter(t => t.status === "resolvido").length;
-    const fechados = userTickets.filter(t => t.status === "fechado").length;
     
-    const alta = userTickets.filter(t => t.priority === "alta").length;
-    const media = userTickets.filter(t => t.priority === "media").length;
-    const baixa = userTickets.filter(t => t.priority === "baixa").length;
+    // Normalizar status para suportar ambos os formatos
+    const abertos = userTickets.filter(t => t.status === "aberto" || t.status === "open").length;
+    const emAndamento = userTickets.filter(t => t.status === "em_andamento" || t.status === "in_progress").length;
+    const resolvidos = userTickets.filter(t => t.status === "resolvido" || t.status === "resolved").length;
+    const fechados = userTickets.filter(t => t.status === "fechado" || t.status === "closed").length;
+    
+    // Normalizar prioridade para suportar ambos os formatos
+    const alta = userTickets.filter(t => t.priority === "alta" || t.priority === "high" || t.priority === "urgent").length;
+    const media = userTickets.filter(t => t.priority === "media" || t.priority === "medium").length;
+    const baixa = userTickets.filter(t => t.priority === "baixa" || t.priority === "low").length;
 
     // Tickets ativos (abertos + em andamento)
     const ativos = abertos + emAndamento;
@@ -52,14 +65,20 @@ const UserDashboardMetrics: React.FC<UserDashboardMetricsProps> = ({ tickets, us
     // Taxa de resolução
     const taxaResolucao = total > 0 ? ((resolvidos + fechados) / total * 100) : 0;
     
-    // Tickets criados nos últimos 30 dias
+    // Tickets criados nos últimos 30 dias - usar created_at ou date
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const recentTickets = userTickets.filter(t => new Date(t.date) >= thirtyDaysAgo);
+    const recentTickets = userTickets.filter(t => {
+      const ticketDate = new Date(t.created_at || t.date);
+      return ticketDate >= thirtyDaysAgo;
+    });
     
-    // Tickets criados esta semana
+    // Tickets criados esta semana - usar created_at ou date
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const weekTickets = userTickets.filter(t => new Date(t.date) >= sevenDaysAgo);
+    const weekTickets = userTickets.filter(t => {
+      const ticketDate = new Date(t.created_at || t.date);
+      return ticketDate >= sevenDaysAgo;
+    });
     
     return {
       total,
@@ -90,10 +109,14 @@ const UserDashboardMetrics: React.FC<UserDashboardMetricsProps> = ({ tickets, us
     }).sort((a, b) => b.count - a.count);
   }, [userTickets]);
 
-  // Últimos tickets
+  // Últimos tickets (com normalização de data)
   const recentTickets = useMemo(() => {
     return userTickets
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .sort((a, b) => {
+        const aDate = new Date(a.created_at || a.date).getTime();
+        const bDate = new Date(b.created_at || b.date).getTime();
+        return bDate - aDate;
+      })
       .slice(0, 5);
   }, [userTickets]);
 
@@ -331,7 +354,7 @@ const UserDashboardMetrics: React.FC<UserDashboardMetricsProps> = ({ tickets, us
                       {ticket.subject}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {new Date(ticket.date).toLocaleDateString('pt-BR')} • {ticket.department}
+                      {new Date(ticket.created_at || ticket.date).toLocaleDateString('pt-BR')} • {ticket.department}
                     </p>
                   </div>
                 </div>

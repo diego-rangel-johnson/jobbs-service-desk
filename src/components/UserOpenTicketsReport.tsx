@@ -30,39 +30,50 @@ const UserOpenTicketsReport: React.FC<UserOpenTicketsReportProps> = ({ tickets, 
   // Obter user ID para filtragem correta
   const { user } = useAuth();
 
-  // Filtrar apenas tickets abertos do usuário usando customer_id
+  // Filtrar apenas tickets abertos do usuário usando customer_id (Supabase) ou customer (localStorage)
   const userOpenTickets = useMemo(() => {
-    if (!user) return [];
-    return tickets.filter(ticket => 
-      (ticket.customer_id === user.id || ticket.customer?.user_id === user.id) && 
-      (ticket.status === "open" || ticket.status === "aberto")
-    );
-  }, [tickets, user]);
+    if (!user && !userName) return [];
+    
+    return tickets.filter(ticket => {
+      // Verificar se é ticket do usuário
+      const isUserTicket = (user && (ticket.customer_id === user.id || ticket.customer?.user_id === user.id)) ||
+                          ticket.customer === userName;
+      
+      // Verificar se está aberto (normalizar diferentes formatos)
+      const isOpen = ticket.status === "open" || ticket.status === "aberto";
+      
+      return isUserTicket && isOpen;
+    });
+  }, [tickets, user, userName]);
 
-  // Estatísticas dos tickets abertos do usuário
+  // Estatísticas dos tickets abertos do usuário (com normalização de prioridade)
   const userOpenStats = useMemo(() => {
     const total = userOpenTickets.length;
-    const alta = userOpenTickets.filter(t => t.priority === "alta").length;
-    const media = userOpenTickets.filter(t => t.priority === "media").length;
-    const baixa = userOpenTickets.filter(t => t.priority === "baixa").length;
+    
+    // Normalizar prioridade para suportar ambos os formatos
+    const alta = userOpenTickets.filter(t => t.priority === "alta" || t.priority === "high" || t.priority === "urgent").length;
+    const media = userOpenTickets.filter(t => t.priority === "media" || t.priority === "medium").length;
+    const baixa = userOpenTickets.filter(t => t.priority === "baixa" || t.priority === "low").length;
 
     // Tickets sem responsável
     const semResponsavel = userOpenTickets.filter(t => 
       t.assignee === "Não atribuído" || !t.assignee
     ).length;
 
-    // Tickets antigos (mais de 7 dias)
+    // Tickets antigos (mais de 7 dias) - usar created_at ou date
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const ticketsAntigos = userOpenTickets.filter(t => 
-      new Date(t.date) < sevenDaysAgo
-    ).length;
+    const ticketsAntigos = userOpenTickets.filter(t => {
+      const ticketDate = new Date(t.created_at || t.date);
+      return ticketDate < sevenDaysAgo;
+    }).length;
 
     // Tickets muito antigos (mais de 30 dias)
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const ticketsMuitoAntigos = userOpenTickets.filter(t => 
-      new Date(t.date) < thirtyDaysAgo
-    ).length;
+    const ticketsMuitoAntigos = userOpenTickets.filter(t => {
+      const ticketDate = new Date(t.created_at || t.date);
+      return ticketDate < thirtyDaysAgo;
+    }).length;
 
     return {
       total,
@@ -94,19 +105,28 @@ const UserOpenTicketsReport: React.FC<UserOpenTicketsReportProps> = ({ tickets, 
     }).sort((a, b) => b.count - a.count);
   }, [userOpenTickets]);
 
-  // Tickets críticos do usuário (alta prioridade + antigos)
+  // Tickets críticos do usuário (alta prioridade + antigos) - com normalização
   const userCriticalTickets = useMemo(() => {
     const now = new Date();
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
     
-    return userOpenTickets.filter(ticket => 
-      ticket.priority === "alta" || 
-      new Date(ticket.date) < threeDaysAgo
-    ).sort((a, b) => {
+    return userOpenTickets.filter(ticket => {
+      const isHighPriority = ticket.priority === "alta" || ticket.priority === "high" || ticket.priority === "urgent";
+      const ticketDate = new Date(ticket.created_at || ticket.date);
+      const isOld = ticketDate < threeDaysAgo;
+      
+      return isHighPriority || isOld;
+    }).sort((a, b) => {
       // Ordenar por prioridade (alta primeiro) e depois por data (mais antigo primeiro)
-      if (a.priority === "alta" && b.priority !== "alta") return -1;
-      if (a.priority !== "alta" && b.priority === "alta") return 1;
-      return new Date(a.date).getTime() - new Date(b.date).getTime();
+      const aIsHigh = a.priority === "alta" || a.priority === "high" || a.priority === "urgent";
+      const bIsHigh = b.priority === "alta" || b.priority === "high" || b.priority === "urgent";
+      
+      if (aIsHigh && !bIsHigh) return -1;
+      if (!aIsHigh && bIsHigh) return 1;
+      
+      const aDate = new Date(a.created_at || a.date).getTime();
+      const bDate = new Date(b.created_at || b.date).getTime();
+      return aDate - bDate;
     });
   }, [userOpenTickets]);
 
@@ -128,16 +148,16 @@ const UserOpenTicketsReport: React.FC<UserOpenTicketsReportProps> = ({ tickets, 
     }
   };
 
-  const calculateDaysOpen = (date: string) => {
+  const calculateDaysOpen = (ticket: any) => {
     const now = new Date();
-    const ticketDate = new Date(date);
+    const ticketDate = new Date(ticket.created_at || ticket.date);
     const diffTime = Math.abs(now.getTime() - ticketDate.getTime());
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
   const getUrgencyLevel = (ticket: any) => {
-    const daysOpen = calculateDaysOpen(ticket.date);
-    const isHighPriority = ticket.priority === "alta";
+    const daysOpen = calculateDaysOpen(ticket);
+    const isHighPriority = ticket.priority === "alta" || ticket.priority === "high" || ticket.priority === "urgent";
     const hasNoAssignee = ticket.assignee === "Não atribuído" || !ticket.assignee;
 
     if (isHighPriority && daysOpen > 1) return "CRÍTICO";
@@ -185,7 +205,7 @@ const UserOpenTicketsReport: React.FC<UserOpenTicketsReportProps> = ({ tickets, 
     csvContent += "Urgência,ID,Assunto,Prioridade,Responsável,Departamento,Dias Aberto\n";
     userCriticalTickets.forEach(ticket => {
       const urgency = getUrgencyLevel(ticket);
-      const daysOpen = calculateDaysOpen(ticket.date);
+      const daysOpen = calculateDaysOpen(ticket);
       csvContent += `${urgency},${ticket.id},"${ticket.subject}",${ticket.priority},"${ticket.assignee}",${ticket.department},${daysOpen}\n`;
     });
     
@@ -230,7 +250,7 @@ const UserOpenTicketsReport: React.FC<UserOpenTicketsReportProps> = ({ tickets, 
     excelContent += "Urgência\tID\tAssunto\tPrioridade\tResponsável\tDepartamento\tDias Aberto\n";
     userCriticalTickets.forEach(ticket => {
       const urgency = getUrgencyLevel(ticket);
-      const daysOpen = calculateDaysOpen(ticket.date);
+      const daysOpen = calculateDaysOpen(ticket);
       excelContent += `${urgency}\t${ticket.id}\t${ticket.subject}\t${ticket.priority}\t${ticket.assignee}\t${ticket.department}\t${daysOpen}\n`;
     });
     
@@ -343,7 +363,7 @@ const UserOpenTicketsReport: React.FC<UserOpenTicketsReportProps> = ({ tickets, 
               </tr>
               ${userCriticalTickets.slice(0, 20).map(ticket => {
                 const urgency = getUrgencyLevel(ticket);
-                const daysOpen = calculateDaysOpen(ticket.date);
+                const daysOpen = calculateDaysOpen(ticket);
                 const rowClass = urgency === 'CRÍTICO' ? 'critical' : urgency === 'URGENTE' ? 'urgent' : '';
                 
                 return `
@@ -388,7 +408,7 @@ const UserOpenTicketsReport: React.FC<UserOpenTicketsReportProps> = ({ tickets, 
         priority: t.priority,
         assignee: t.assignee,
         department: t.department,
-        daysOpen: calculateDaysOpen(t.date),
+        daysOpen: calculateDaysOpen(t),
         urgencyLevel: getUrgencyLevel(t)
       })),
       departamentos: userOpenTicketsByDepartment
@@ -576,7 +596,7 @@ const UserOpenTicketsReport: React.FC<UserOpenTicketsReportProps> = ({ tickets, 
               <TableBody>
                 {userCriticalTickets.slice(0, 10).map((ticket) => {
                   const urgency = getUrgencyLevel(ticket);
-                  const daysOpen = calculateDaysOpen(ticket.date);
+                  const daysOpen = calculateDaysOpen(ticket);
                   
                   return (
                     <TableRow key={ticket.id}>

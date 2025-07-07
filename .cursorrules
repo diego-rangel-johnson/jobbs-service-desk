@@ -1,0 +1,6 @@
+# Configuração específica para este projeto
+# Forçar uso de configuração local do Supabase
+
+Projeto: Jobbs Service Desk - Real
+Supabase Project ID: tjjpwsjrmoisowewebcs
+Configuração: Use apenas cursor/mcp.json local, ignore configurações globais 

@@ -268,23 +268,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      debug_user_creation: {
-        Args: {
-          p_email: string
-          p_name: string
-          p_role?: Database["public"]["Enums"]["app_role"]
-          p_company_id?: string
-        }
-        Returns: {
-          action: string
-          status: string
-          details: string
-        }[]
-      }
-      ensure_admin_exists: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
       generate_ticket_number: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -336,31 +319,6 @@ export type Database = {
       promote_user_to_supervisor: {
         Args: { user_email: string; company_id: string }
         Returns: undefined
-      }
-      test_company_creation: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          test_name: string
-          status: string
-          details: string
-        }[]
-      }
-      test_user_ticket_creation: {
-        Args: {
-          user_email: string
-          ticket_subject: string
-          ticket_description: string
-        }
-        Returns: Json
-      }
-      update_user_profile: {
-        Args: {
-          target_user_id: string
-          new_name: string
-          new_company_id?: string
-          new_role?: string
-        }
-        Returns: boolean
       }
     }
     Enums: {
@@ -487,4 +445,4 @@ export const Constants = {
       ticket_status: ["open", "in_progress", "resolved", "closed"],
     },
   },
-} as const
+} as const 

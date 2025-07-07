@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { performanceLogger } from '@/utils/performanceLogger';
 
 export interface Ticket {
   id: string;
@@ -61,6 +62,9 @@ export const useTickets = () => {
   const fetchTickets = useCallback(async () => {
     if (!user) return;
 
+    const operationId = `fetch_tickets_${Date.now()}`;
+    performanceLogger.startOperation(operationId, 'Buscar Tickets');
+
     try {
       setIsLoading(true);
       
@@ -100,11 +104,19 @@ export const useTickets = () => {
       const { data: ticketsData, error: ticketsError } = await query;
 
       if (ticketsError) {
+        performanceLogger.endOperation(operationId, false, { 
+          role: isAdmin ? 'admin' : isSupport ? 'support' : isSupervisor ? 'supervisor' : 'user',
+          filtersApplied: !isAdmin && !isSupport
+        }, ticketsError.message, user.id);
         console.error('Error fetching tickets:', ticketsError);
         return;
       }
 
       if (!ticketsData || ticketsData.length === 0) {
+        performanceLogger.endOperation(operationId, true, { 
+          ticketsCount: 0,
+          role: isAdmin ? 'admin' : isSupport ? 'support' : isSupervisor ? 'supervisor' : 'user'
+        }, undefined, user.id);
         setTickets([]);
         return;
       }
@@ -141,8 +153,18 @@ export const useTickets = () => {
       }));
 
       setTickets(enrichedTickets);
+      
+      performanceLogger.endOperation(operationId, true, { 
+        ticketsCount: enrichedTickets.length,
+        profilesLoaded: Object.keys(profilesMap).length,
+        role: isAdmin ? 'admin' : isSupport ? 'support' : isSupervisor ? 'supervisor' : 'user'
+      }, undefined, user.id);
+      
       console.log(`✅ ${enrichedTickets.length} tickets carregados`);
     } catch (error) {
+      performanceLogger.endOperation(operationId, false, { 
+        role: isAdmin ? 'admin' : isSupport ? 'support' : isSupervisor ? 'supervisor' : 'user'
+      }, error instanceof Error ? error.message : 'Erro desconhecido', user.id);
       console.error('Erro ao buscar tickets:', error);
     } finally {
       setIsLoading(false);
@@ -223,6 +245,9 @@ export const useTickets = () => {
   }) => {
     if (!user) return { error: 'User not authenticated' };
 
+    const operationId = `create_ticket_${Date.now()}`;
+    performanceLogger.startOperation(operationId, 'Criar Ticket');
+
     try {
       console.log('🎫 Criando ticket...');
       
@@ -234,6 +259,9 @@ export const useTickets = () => {
         .single();
 
       if (profileError) {
+        performanceLogger.endOperation(operationId, false, { 
+          step: 'fetch_profile' 
+        }, profileError.message, user.id);
         console.error('Error fetching user profile:', profileError);
         return { error: 'Erro ao buscar perfil do usuário' };
       }
@@ -260,6 +288,10 @@ export const useTickets = () => {
         .single();
 
       if (ticketError) {
+        performanceLogger.endOperation(operationId, false, { 
+          step: 'create_ticket',
+          ticketData: ticketInsertData
+        }, ticketError.message, user.id);
         console.error('Error creating ticket:', ticketError);
         return { error: ticketError.message };
       }
@@ -283,6 +315,7 @@ export const useTickets = () => {
       console.log('✅ Ticket adicionado ao estado local');
 
       // Se há anexo, fazer upload e criar registro
+      let attachmentSuccess = true;
       if (ticketData.attachment && ticketCreateData) {
         const uploadResult = await uploadFile(ticketData.attachment, ticketCreateData.id);
         
@@ -295,15 +328,25 @@ export const useTickets = () => {
 
           if (attachmentResult.error) {
             console.warn('Ticket criado mas falha ao salvar anexo:', attachmentResult.error);
+            attachmentSuccess = false;
           } else {
             console.log('✅ Ticket criado com anexo');
           }
         } else {
           console.warn('Ticket criado mas falha no upload:', uploadResult.error);
+          attachmentSuccess = false;
         }
       } else {
         console.log('✅ Ticket criado com sucesso');
       }
+
+      performanceLogger.endOperation(operationId, true, { 
+        ticketId: ticketCreateData.id,
+        ticketNumber: ticketCreateData.ticket_number,
+        hasAttachment: !!ticketData.attachment,
+        attachmentSuccess,
+        companyId: userProfile?.company_id
+      }, undefined, user.id);
 
       // Refresh para garantir sincronização completa com joins
       setTimeout(() => {
@@ -313,6 +356,9 @@ export const useTickets = () => {
       
       return { data: ticketCreateData, error: null };
     } catch (error) {
+      performanceLogger.endOperation(operationId, false, { 
+        step: 'unexpected_error'
+      }, error instanceof Error ? error.message : 'Erro desconhecido', user.id);
       console.error('Error creating ticket:', error);
       return { error: 'Erro interno do servidor' };
     }
@@ -552,6 +598,10 @@ export const useTickets = () => {
         },
         (payload) => {
           console.log('🔄 Ticket change detected:', payload.eventType);
+          performanceLogger.logSync('Real-time Ticket Update', true, { 
+            eventType: payload.eventType,
+            table: 'tickets'
+          }, undefined, user.id);
           // Refresh com delay para garantir consistência
           setTimeout(fetchTickets, 300);
         }
@@ -559,8 +609,15 @@ export const useTickets = () => {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log('✅ Real-time subscriptions active');
+          performanceLogger.logSync('Real-time Subscription', true, { 
+            status: 'SUBSCRIBED',
+            channel: 'tickets-realtime'
+          }, undefined, user.id);
         } else if (status === 'CHANNEL_ERROR') {
           console.warn('⚠️ Real-time subscription error, will retry...');
+          performanceLogger.logSync('Real-time Subscription', false, { 
+            status: 'CHANNEL_ERROR'
+          }, 'Erro na subscription real-time', user.id);
         }
       });
 

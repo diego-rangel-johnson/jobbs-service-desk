@@ -9,8 +9,7 @@
       ],
       "env": {
         "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}",
-        "SUPABASE_PROJECT_REF": "tjjpwsjrmoisowewebcs",
-        "SUPABASE_DB_PASSWORD": "${SUPABASE_DB_PASSWORD}"
+        "SUPABASE_PROJECT_REF": "tjjpwsjrmoisowewebcs"
       }
     }
   }

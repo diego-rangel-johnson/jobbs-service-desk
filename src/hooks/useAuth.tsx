@@ -3,15 +3,19 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
-  user: User | null;
   session: Session | null;
+  user: User | null;
+  userRoles: string[];
   isLoading: boolean;
-  signUp: (email: string, password: string, name: string) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signOut: () => Promise<void>;
+  signUp: (email: string, password: string, name: string) => Promise<{ error: AuthError | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
+  signOut: () => Promise<{ error: AuthError | null }>;
   isAdmin: boolean;
-  isSupport: boolean;
-  isSupervisor: boolean;
+  isMember: boolean;
+  isViewer: boolean;
+  isAttendant: boolean;
+  canViewOrganization: (organizationId: string) => Promise<boolean>;
+  getAttendantOrganizations: () => Promise<any[]>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,62 +29,48 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(null);
   const [userRoles, setUserRoles] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Função para buscar roles do usuário com retry mais robusto
+  // Função para buscar roles do usuário (adaptada para o novo sistema)
   const fetchUserRoles = async (userId: string, retryCount = 0) => {
     try {
-      console.log(`🔍 Buscando roles para usuário: ${userId} (tentativa ${retryCount + 1})`);
+      console.log('🔍 Buscando roles para usuário:', userId);
       
+      // Buscar roles do usuário nas organizações
       const { data: roles, error } = await supabase
-        .from('user_roles')
-        .select('role')
+        .from('organization_users')
+        .select('role, organization_id')
         .eq('user_id', userId);
-      
+
       if (error) {
         console.error('❌ Erro ao buscar roles:', error);
-        
-        // Retry com backoff exponencial
-        if (retryCount < 5) {
-          const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s, 8s, 16s
-          console.log(`⏳ Tentando novamente em ${delay}ms...`);
-          setTimeout(() => fetchUserRoles(userId, retryCount + 1), delay);
-          return;
-        }
-        
-        console.error('💥 Falha definitiva ao buscar roles após 5 tentativas');
-        setUserRoles([]);
-      } else {
+        throw error;
+      }
+
+      if (roles && roles.length > 0) {
         console.log('✅ Roles encontrados:', roles);
-        const rolesList = roles?.map(r => r.role) || [];
+        const rolesList = roles.map(r => r.role);
         setUserRoles(rolesList);
         
         // Log detalhado das roles
         console.log('👑 Roles do usuário:', {
           roles: rolesList,
           isAdmin: rolesList.includes('admin'),
-          isSupport: rolesList.includes('support'),
-          isUser: rolesList.includes('user')
+          isMember: rolesList.includes('member'),
+          isViewer: rolesList.includes('viewer'),
+          isAttendant: rolesList.includes('atendente')
         });
-        
-        // Se não tem roles, garantir que admin padrão exista
-        if (roles.length === 0 && retryCount < 2) {
-          console.log('🔧 Verificando se admin padrão precisa ser criado...');
-          supabase.rpc('ensure_admin_exists').then(({ data, error }) => {
-            if (!error && data) {
-              console.log('👑 Admin padrão criado, refazendo busca de roles...');
-              setTimeout(() => fetchUserRoles(userId, retryCount + 1), 2000);
-            }
-          });
-        }
+      } else {
+        console.log('⚠️ Nenhuma role encontrada para o usuário');
+        setUserRoles([]);
       }
     } catch (error) {
       console.error('💥 Exceção ao buscar roles:', error);
       
-      // Retry mesmo em caso de exceção
+      // Retry em caso de exceção
       if (retryCount < 3) {
         setTimeout(() => fetchUserRoles(userId, retryCount + 1), 2000);
       } else {
@@ -158,39 +148,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signOut = async () => {
-    console.log('🚪 Fazendo logout...');
-    setUserRoles([]);
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    return { error };
   };
 
+  // Helper functions para verificar roles
   const isAdmin = userRoles.includes('admin');
-  const isSupport = userRoles.includes('support') || isAdmin;
-  const isSupervisor = userRoles.includes('supervisor');
+  const isMember = userRoles.includes('member');
+  const isViewer = userRoles.includes('viewer');
+  const isAttendant = userRoles.includes('atendente');
 
-  // Log detalhado das roles sempre que mudarem
-  useEffect(() => {
-    if (user) {
-      console.log('🎭 Status de autenticação atualizado:', {
-        email: user.email,
-        roles: userRoles,
-        isAdmin,
-        isSupport,
-        isSupervisor,
-        isLoading
+  // Função para verificar se pode ver dados de uma organização
+  const canViewOrganization = async (organizationId: string): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      const { data, error } = await supabase.rpc('can_view_organization_interactions', {
+        _user_id: user.id,
+        _organization_id: organizationId
       });
+      
+      if (error) {
+        console.error('Erro ao verificar permissões:', error);
+        return false;
+      }
+      
+      return data || false;
+    } catch (error) {
+      console.error('Erro ao verificar permissões:', error);
+      return false;
     }
-  }, [user, userRoles, isAdmin, isSupport, isSupervisor, isLoading]);
+  };
+
+  // Função para obter organizações do atendente
+  const getAttendantOrganizations = async () => {
+    if (!user || !isAttendant) return [];
+    
+    try {
+      const { data, error } = await supabase.rpc('get_attendant_organizations', {
+        _attendant_id: user.id
+      });
+      
+      if (error) {
+        console.error('Erro ao buscar organizações do atendente:', error);
+        return [];
+      }
+      
+      return data || [];
+    } catch (error) {
+      console.error('Erro ao buscar organizações do atendente:', error);
+      return [];
+    }
+  };
 
   const value = {
-    user,
     session,
+    user,
+    userRoles,
     isLoading,
     signUp,
     signIn,
     signOut,
     isAdmin,
-    isSupport,
-    isSupervisor
+    isMember,
+    isViewer,
+    isAttendant,
+    canViewOrganization,
+    getAttendantOrganizations
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

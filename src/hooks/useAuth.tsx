@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
@@ -11,6 +11,9 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<{ error: AuthError | null }>;
   isAdmin: boolean;
+  isSupport: boolean;
+  isSupervisor: boolean;
+  isUser: boolean;
   isMember: boolean;
   isViewer: boolean;
   isAttendant: boolean;
@@ -34,15 +37,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userRoles, setUserRoles] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Função para buscar roles do usuário (adaptada para o novo sistema)
+  // Função para buscar roles do usuário (sistema original)
   const fetchUserRoles = async (userId: string, retryCount = 0) => {
     try {
       console.log('🔍 Buscando roles para usuário:', userId);
       
-      // Buscar roles do usuário nas organizações
+      // Buscar roles do sistema original
       const { data: roles, error } = await supabase
-        .from('organization_users')
-        .select('role, organization_id')
+        .from('user_roles')
+        .select('role')
         .eq('user_id', userId);
 
       if (error) {
@@ -51,7 +54,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (roles && roles.length > 0) {
-        console.log('✅ Roles encontrados:', roles);
         const rolesList = roles.map(r => r.role);
         setUserRoles(rolesList);
         
@@ -59,9 +61,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         console.log('👑 Roles do usuário:', {
           roles: rolesList,
           isAdmin: rolesList.includes('admin'),
-          isMember: rolesList.includes('member'),
-          isViewer: rolesList.includes('viewer'),
-          isAttendant: rolesList.includes('atendente')
+          isSupport: rolesList.includes('support'),
+          isSupervisor: rolesList.includes('supervisor'),
+          isUser: rolesList.includes('user')
         });
       } else {
         console.log('⚠️ Nenhuma role encontrada para o usuário');
@@ -152,53 +154,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return { error };
   };
 
-  // Helper functions para verificar roles
+  // Helper functions para verificar roles (sistema original)
   const isAdmin = userRoles.includes('admin');
-  const isMember = userRoles.includes('member');
-  const isViewer = userRoles.includes('viewer');
-  const isAttendant = userRoles.includes('atendente');
+  const isSupport = userRoles.includes('support');
+  const isSupervisor = userRoles.includes('supervisor');
+  const isUser = userRoles.includes('user');
+  const isMember = false; // Placeholder para compatibilidade
+  const isViewer = false; // Placeholder para compatibilidade
+  const isAttendant = false; // Placeholder para compatibilidade
 
   // Função para verificar se pode ver dados de uma organização
   const canViewOrganization = async (organizationId: string): Promise<boolean> => {
     if (!user) return false;
     
-    try {
-      const { data, error } = await supabase.rpc('can_view_organization_interactions', {
-        _user_id: user.id,
-        _organization_id: organizationId
-      });
-      
-      if (error) {
-        console.error('Erro ao verificar permissões:', error);
+    // Admins podem ver tudo
+    if (isAdmin) return true;
+    
+    // Por enquanto, supervisores podem ver dados de suas empresas
+    if (isSupervisor) {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .single();
+        
+        return profile?.company_id === organizationId;
+      } catch (error) {
+        console.error('Erro ao verificar empresa do supervisor:', error);
         return false;
       }
-      
-      return data || false;
-    } catch (error) {
-      console.error('Erro ao verificar permissões:', error);
-      return false;
     }
+    
+    return false;
   };
 
   // Função para obter organizações do atendente
   const getAttendantOrganizations = async () => {
     if (!user || !isAttendant) return [];
     
-    try {
-      const { data, error } = await supabase.rpc('get_attendant_organizations', {
-        _attendant_id: user.id
-      });
-      
-      if (error) {
-        console.error('Erro ao buscar organizações do atendente:', error);
-        return [];
-      }
-      
-      return data || [];
-    } catch (error) {
-      console.error('Erro ao buscar organizações do atendente:', error);
-      return [];
-    }
+    // Por enquanto, retornar array vazio até implementar o sistema de atendentes
+    return [];
   };
 
   const value = {
@@ -210,6 +206,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signIn,
     signOut,
     isAdmin,
+    isSupport,
+    isSupervisor,
+    isUser,
     isMember,
     isViewer,
     isAttendant,

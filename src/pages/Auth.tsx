@@ -30,51 +30,57 @@ const Auth = () => {
   }, [user, isAdmin, isSupervisor, isAttendant, isLoading, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-3 sm:px-4 py-4 sm:py-8">
-      <Card className="w-full max-w-md mx-auto">
-        <CardHeader className="text-center space-y-3 sm:space-y-4 pb-4 sm:pb-6">
-          <div className="flex justify-center mb-2 sm:mb-4">
-            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-primary/10 rounded-full flex items-center justify-center">
-              <img 
-                src="/auth-bg.png" 
-                alt="Jobbs Desk Logo" 
-                className="h-8 w-8 sm:h-10 sm:w-10 object-contain"
-                onError={(e) => {
-                  // Fallback se a imagem não carregar
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  const parent = target.parentElement;
-                  if (parent) {
-                    parent.innerHTML = '<div class="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-lg sm:text-xl">J</div>';
-                  }
-                }}
-              />
-            </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-3 sm:px-4 py-4 sm:py-8">
+      <Card className="w-full max-w-md mx-auto shadow-xl border-0 bg-white/95 backdrop-blur-sm">
+        <CardHeader className="text-center space-y-4 sm:space-y-6 pb-4 sm:pb-6 pt-6 sm:pt-8">
+          <div className="flex justify-center mb-2">
+            <img 
+              src="/logo.png" 
+              alt="Jobbs Desk Logo" 
+              className="h-16 w-16 sm:h-20 sm:w-20 object-contain"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const parent = target.parentElement;
+                if (parent) {
+                  parent.innerHTML = '<div class="w-16 h-16 sm:w-20 sm:h-20 bg-primary rounded-xl flex items-center justify-center shadow-lg"><span class="text-white font-bold text-2xl sm:text-3xl">J</span></div>';
+                }
+              }}
+            />
           </div>
-          <CardTitle className="text-xl sm:text-2xl font-bold text-primary">
-            Jobbs Desk
-          </CardTitle>
-          <CardDescription className="text-sm sm:text-base px-2">
-            Sistema de gerenciamento de tickets
-          </CardDescription>
+          
+          <div className="space-y-2">
+            <CardTitle className="text-2xl sm:text-3xl font-bold text-gray-900">
+              Jobbs Desk
+            </CardTitle>
+            <CardDescription className="text-sm sm:text-base text-gray-600">
+              Sistema de gerenciamento de tickets
+            </CardDescription>
+          </div>
         </CardHeader>
         
-        <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
+        <CardContent className="px-4 sm:px-6 pb-6 sm:pb-8">
           <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 h-9 sm:h-10">
-              <TabsTrigger value="login" className="text-sm sm:text-base">
+            <TabsList className="grid w-full grid-cols-2 h-11 sm:h-12 bg-gray-100 rounded-xl p-1 mb-6">
+              <TabsTrigger 
+                value="login" 
+                className="text-sm sm:text-base font-medium rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
                 Entrar
               </TabsTrigger>
-              <TabsTrigger value="signup" className="text-sm sm:text-base">
+              <TabsTrigger 
+                value="signup" 
+                className="text-sm sm:text-base font-medium rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all duration-200"
+              >
                 Cadastrar
               </TabsTrigger>
             </TabsList>
             
-            <TabsContent value="login" className="mt-4 sm:mt-6">
+            <TabsContent value="login" className="mt-0">
               <LoginForm />
             </TabsContent>
             
-            <TabsContent value="signup" className="mt-4 sm:mt-6">
+            <TabsContent value="signup" className="mt-0">
               <SignupForm />
             </TabsContent>
           </Tabs>

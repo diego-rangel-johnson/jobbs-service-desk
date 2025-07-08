@@ -31,12 +31,23 @@ const DashboardHeader = ({ userName, onLogout }: DashboardHeaderProps) => {
       <div className="container mx-auto flex items-center justify-between p-3 sm:p-4">
         {/* Logo e nome da plataforma */}
         <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
-          <div className="w-6 h-6 sm:w-8 sm:h-8 flex-shrink-0">
-            <div className="w-full h-full bg-primary rounded flex items-center justify-center">
-              <span className="text-white font-bold text-xs sm:text-sm">J</span>
-            </div>
+          <div className="w-8 h-8 flex-shrink-0">
+            <img 
+              src="/logo.png" 
+              alt="Jobbs Desk Logo" 
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                // Fallback se a imagem não carregar
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                const parent = target.parentElement;
+                if (parent) {
+                  parent.innerHTML = '<div class="w-8 h-8 bg-primary rounded flex items-center justify-center"><span class="text-white font-bold text-sm">J</span></div>';
+                }
+              }}
+            />
           </div>
-          <h1 className="text-base sm:text-lg lg:text-xl font-semibold truncate">
+          <h1 className="text-lg sm:text-xl font-semibold truncate">
             Jobbs Desk
           </h1>
         </div>

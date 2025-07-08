@@ -101,6 +101,30 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Melhorias para mobile */
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Melhoria para touch targets */
+  button, [role="button"], input, select, textarea {
+    touch-action: manipulation;
+  }
+
+  /* Melhoria para foco em mobile */
+  @media (hover: none) and (pointer: coarse) {
+    *:focus {
+      outline: none;
+    }
   }
 }
 
@@ -153,5 +177,71 @@ All colors MUST be HSL.
     -webkit-line-clamp: unset;
     -webkit-box-orient: unset;
     overflow: visible;
+  }
+}
+
+/* Mobile-specific utilities */
+@layer utilities {
+  /* Safe area insets para iPhones */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Melhoria para elementos touch */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Ocultar scrollbar mas manter funcionalidade */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Smooth touch scroll */
+  .touch-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Prevent text selection on UI elements */
+  .select-none-ui {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  /* Mobile-first card spacing */
+  @media (max-width: 640px) {
+    .mobile-card-spacing {
+      margin: 0.75rem;
+    }
+  }
+
+  /* Mobile dialog adjustments */
+  @media (max-width: 640px) {
+    .mobile-dialog {
+      margin: 0.5rem;
+      width: calc(100vw - 1rem);
+      max-height: calc(100vh - 1rem);
+    }
   }
 }

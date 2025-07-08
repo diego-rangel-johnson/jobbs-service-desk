@@ -105,6 +105,41 @@ const TableCaption = React.forwardRef<
 ))
 TableCaption.displayName = "TableCaption"
 
+// Componente de tabela responsiva que se transforma em cards no mobile
+const ResponsiveTable = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & {
+    headers: string[]
+    data: any[]
+    renderRow: (item: any, index: number) => React.ReactNode
+    renderCard: (item: any, index: number) => React.ReactNode
+  }
+>(({ className, headers, data, renderRow, renderCard, ...props }, ref) => (
+  <div ref={ref} className={cn("w-full", className)} {...props}>
+    {/* Versão desktop - tabela normal */}
+    <div className="hidden md:block">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {headers.map((header, index) => (
+              <TableHead key={index}>{header}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.map((item, index) => renderRow(item, index))}
+        </TableBody>
+      </Table>
+    </div>
+
+    {/* Versão mobile - cards */}
+    <div className="md:hidden space-y-3">
+      {data.map((item, index) => renderCard(item, index))}
+    </div>
+  </div>
+))
+ResponsiveTable.displayName = "ResponsiveTable"
+
 export {
   Table,
   TableHeader,
@@ -114,4 +149,5 @@ export {
   TableRow,
   TableCell,
   TableCaption,
+  ResponsiveTable,
 }

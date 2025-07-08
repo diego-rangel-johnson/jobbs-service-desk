@@ -16,6 +16,8 @@ import UserTicketReports from "@/components/UserTicketReports";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, List, Plus, FileText, Ticket as TicketIcon, Clock, Eye } from "lucide-react";
 import { useTickets } from "@/hooks/useTickets";
+import { SLA_CONFIGS } from '@/types/sla';
+import { SLAStatusIndicator } from '@/components/SLA/SLAStatusIndicator';
 
 const UserDashboard = () => {
   console.log("UserDashboard rendering...");
@@ -29,7 +31,7 @@ const UserDashboard = () => {
   
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, signOut, isAdmin, isSupervisor, isLoading } = useAuth();
+  const { user, signOut, isAdmin, isSupervisor, isAttendant, isLoading } = useAuth();
   const { tickets, isLoading: ticketsLoading, createTicket } = useTickets();
   
   // Usar dados do Supabase Auth quando disponível, fallback para localStorage
@@ -47,7 +49,7 @@ const UserDashboard = () => {
     return () => window.removeEventListener('resize', checkIsMobile);
   }, []);
 
-  // Redirecionar administradores e supervisores para suas respectivas telas
+  // Redirecionar administradores, supervisores e atendentes para suas respectivas telas
   useEffect(() => {
     if (!isLoading && isAdmin) {
       console.log('👑 Admin detectado no UserDashboard, redirecionando para /admin');
@@ -55,8 +57,11 @@ const UserDashboard = () => {
     } else if (!isLoading && isSupervisor) {
       console.log('👨‍💼 Supervisor detectado no UserDashboard, redirecionando para /supervisor');
       navigate('/supervisor', { replace: true });
+    } else if (!isLoading && isAttendant) {
+      console.log('🎧 Atendente detectado no UserDashboard, redirecionando para /attendant');
+      navigate('/attendant', { replace: true });
     }
-  }, [isAdmin, isSupervisor, isLoading, navigate]);
+  }, [isAdmin, isSupervisor, isAttendant, isLoading, navigate]);
 
   const handleLogout = async () => {
     try {
@@ -91,6 +96,24 @@ const UserDashboard = () => {
       case "closed":
       case "fechado": return "bg-gray-100 text-gray-800 border-gray-200";
       default: return "bg-gray-100 text-gray-800 border-gray-200";
+    }
+  };
+
+  const getSLACriticalityLabel = (slaCriticality: string) => {
+    return SLA_CONFIGS[slaCriticality as keyof typeof SLA_CONFIGS]?.label || 'Padrão';
+  };
+
+  const getSLACriticalityColor = (slaCriticality: string) => {
+    const config = SLA_CONFIGS[slaCriticality as keyof typeof SLA_CONFIGS];
+    if (!config) return 'border-blue-200 bg-blue-50 text-blue-700';
+    
+    switch (config.color) {
+      case 'red': return 'border-red-200 bg-red-50 text-red-700';
+      case 'orange': return 'border-orange-200 bg-orange-50 text-orange-700';
+      case 'yellow': return 'border-yellow-200 bg-yellow-50 text-yellow-700';
+      case 'blue': return 'border-blue-200 bg-blue-50 text-blue-700';
+      case 'gray': return 'border-gray-200 bg-gray-50 text-gray-700';
+      default: return 'border-blue-200 bg-blue-50 text-blue-700';
     }
   };
 
@@ -199,8 +222,8 @@ const UserDashboard = () => {
     );
   }
 
-  // Se for admin ou supervisor, não renderizar o dashboard (será redirecionado)
-  if (isAdmin || isSupervisor) {
+  // Se for admin, supervisor ou atendente, não renderizar o dashboard (será redirecionado)
+  if (isAdmin || isSupervisor || isAttendant) {
     return null;
   }
   
@@ -309,12 +332,21 @@ const UserDashboard = () => {
                       {ticketForDialog.subject}
                     </h2>
                     <div className="flex items-center gap-3 flex-wrap">
-                      <Badge className={getPriorityBadgeColor(ticketForDialog.priority)}>
-                        {getPriorityLabel(ticketForDialog.priority)}
+                      <Badge className={getSLACriticalityColor(ticketForDialog.sla_criticality || 'padrao')}>
+                        {getSLACriticalityLabel(ticketForDialog.sla_criticality || 'padrao')}
                       </Badge>
                       <Badge variant="secondary" className={getStatusColor(ticketForDialog.status)}>
                         {getStatusLabel(ticketForDialog.status)}
                       </Badge>
+                      {ticketForDialog.sla_status && (
+                        <SLAStatusIndicator 
+                          status={ticketForDialog.sla_status}
+                          responseDeadline={ticketForDialog.sla_response_deadline}
+                          solutionDeadline={ticketForDialog.sla_solution_deadline}
+                          showDetails={false}
+                          className="text-xs"
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
@@ -421,7 +453,7 @@ const UserDashboard = () => {
                       </div>
                       <p className="text-sm text-gray-600">
                         Status: {getStatusLabel(ticketForDialog.status)} • 
-                        Prioridade: {getPriorityLabel(ticketForDialog.priority)}
+                        Criticidade: {getSLACriticalityLabel(ticketForDialog.sla_criticality || 'padrao')}
                       </p>
                     </div>
                   </div>

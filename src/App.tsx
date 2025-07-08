@@ -8,8 +8,9 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Auth from "./pages/Auth";
 import UserDashboard from "./pages/UserDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
-import NotFound from "./pages/NotFound";
 import SupervisorDashboard from "@/pages/SupervisorDashboard";
+import AttendantDashboard from "@/components/AttendantDashboard";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
@@ -32,7 +33,16 @@ const App = () => (
                 <AdminDashboard />
               </ProtectedRoute>
             } />
-            <Route path="/supervisor" element={<SupervisorDashboard />} />
+            <Route path="/supervisor" element={
+              <ProtectedRoute requireSupervisor>
+                <SupervisorDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/attendant" element={
+              <ProtectedRoute requireAttendant>
+                <AttendantDashboard />
+              </ProtectedRoute>
+            } />
             <Route path="/" element={<Navigate to="/auth" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

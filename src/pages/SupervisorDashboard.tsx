@@ -26,13 +26,17 @@ import {
   ChevronDown,
   Settings,
   BarChart,
-  FileText
+  FileText,
+  RefreshCw
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import SupervisorReports from "@/components/SupervisorReports";
+import DashboardHeader from "@/components/DashboardHeader";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SLADashboard } from '@/components/SLA/SLADashboard';
+import { SLAStatusIndicator } from '@/components/SLA/SLAStatusIndicator';
 
 const SupervisorDashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,16 +50,22 @@ const SupervisorDashboard = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
 
   const navigate = useNavigate();
-  const { user, signOut, isAdmin, isSupervisor, isLoading } = useAuth();
+  const { user, signOut, isAdmin, isSupervisor, isLoading, userCompany } = useAuth();
   const { tickets, isLoading: ticketsLoading, refreshTickets } = useTickets();
   const { toast } = useToast();
 
   const userName = user?.user_metadata?.name || user?.email || "Supervisor";
 
+  // Debug: Log dos dados do supervisor
+  useEffect(() => {
+    if (user && isSupervisor) {
+      // Dados carregados - pronto para usar
+    }
+  }, [user, isSupervisor, userCompany, tickets.length, isAdmin]);
+
   // Redirecionar se não for supervisor
   useEffect(() => {
     if (!isLoading && !isSupervisor && !isAdmin) {
-      console.log('🚫 Acesso negado - Redirecionando usuário para dashboard normal');
       navigate('/dashboard', { replace: true });
     }
   }, [isSupervisor, isAdmin, isLoading, navigate]);
@@ -132,12 +142,10 @@ const SupervisorDashboard = () => {
 
   const handleLogout = async () => {
     try {
-      console.log('🚪 Iniciando logout supervisor...');
       await signOut();
-      console.log('✅ Logout realizado com sucesso');
       navigate("/auth");
     } catch (error) {
-      console.error('❌ Erro no logout:', error);
+      console.error('Erro no logout:', error);
       toast({
         title: "Erro no logout",
         description: "Houve um problema ao fazer logout. Tente novamente.",
@@ -151,22 +159,46 @@ const SupervisorDashboard = () => {
     setShowViewDialog(true);
   };
 
+  const handleRefresh = async () => {
+    try {
+      refreshTickets();
+      toast({
+        title: "Lista atualizada",
+        description: "Os tickets foram atualizados com sucesso.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao atualizar",
+        description: "Houve um problema ao atualizar a lista de tickets.",
+        variant: "destructive"
+      });
+    }
+  };
+
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "urgent": return "bg-red-600 text-white";
-      case "high": return "bg-red-500 text-white";
-      case "medium": return "bg-yellow-500 text-white";
-      case "low": return "bg-green-500 text-white";
+      case "urgent": 
+      case "urgente": return "bg-red-600 text-white";
+      case "high":
+      case "alta": return "bg-red-500 text-white";
+      case "medium":
+      case "media": return "bg-yellow-500 text-white";
+      case "low":
+      case "baixa": return "bg-green-500 text-white";
       default: return "bg-gray-500 text-white";
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "open": return "bg-blue-100 text-blue-800";
-      case "in_progress": return "bg-yellow-100 text-yellow-800";
-      case "resolved": return "bg-green-100 text-green-800";
-      case "closed": return "bg-gray-100 text-gray-800";
+      case "open":
+      case "aberto": return "bg-blue-100 text-blue-800";
+      case "in_progress":
+      case "em_andamento": return "bg-yellow-100 text-yellow-800";
+      case "resolved":
+      case "resolvido": return "bg-green-100 text-green-800";
+      case "closed":
+      case "fechado": return "bg-gray-100 text-gray-800";
       default: return "bg-gray-100 text-gray-800";
     }
   };
@@ -181,6 +213,27 @@ const SupervisorDashboard = () => {
     }
   };
 
+  const getPriorityLabel = (priority: string) => {
+    switch (priority) {
+      case "urgent": return "Urgente";
+      case "high": return "Alta";
+      case "medium": return "Média";
+      case "low": return "Baixa";
+      default: return priority;
+    }
+  };
+
+  const getSLACriticalityLabel = (criticality: string) => {
+    const labels = {
+      'muito_alta': 'Muito Alta',
+      'alta': 'Alta',
+      'moderada': 'Moderada', 
+      'padrao': 'Padrão',
+      'geral': 'Geral'
+    };
+    return labels[criticality as keyof typeof labels] || criticality;
+  };
+
   if (isLoading || ticketsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -191,62 +244,8 @@ const SupervisorDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card shadow-sm">
-        <div className="container mx-auto flex items-center justify-between p-3 sm:p-4">
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            <div className="w-6 h-6 sm:w-8 sm:h-8">
-              <img src="/logo.png" alt="Jobbs Desk Logo" className="w-full h-full object-contain" />
-            </div>
-            <div className="hidden sm:block">
-              <h1 className="text-lg sm:text-xl font-semibold">Jobbs Desk Supervisor</h1>
-              <p className="text-sm text-muted-foreground">
-                {companyInfo ? `${companyInfo.name}` : 'Painel de Supervisão'}
-              </p>
-            </div>
-            <div className="sm:hidden">
-              <h1 className="text-lg font-semibold">Supervisor</h1>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-1 sm:space-x-4">
-            <Button variant="ghost" size="sm" className="hidden sm:flex">
-              <Bell className="h-4 w-4" />
-            </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="flex items-center space-x-1 sm:space-x-2">
-                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-100 rounded-full flex items-center justify-center">
-                    <UserCog className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
-                  </div>
-                  <span className="text-xs sm:text-sm font-medium hidden xs:block">{userName}</span>
-                  <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48 sm:w-56">
-                <DropdownMenuItem onClick={() => setActiveTab("reports")}>
-                  <BarChart className="mr-2 h-4 w-4" />
-                  Relatórios da Equipe
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {}}>
-                  <FileText className="mr-2 h-4 w-4" />
-                  Análise de Performance
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => {}}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Configurações
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+      {/* Header padrão */}
+      <DashboardHeader userName={userName} onLogout={handleLogout} />
 
       <div className="container mx-auto p-3 sm:p-4 lg:p-6">
         {/* Header com informações da empresa */}
@@ -259,15 +258,11 @@ const SupervisorDashboard = () => {
 
         {/* Navigation Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="dashboard" className="flex items-center gap-2">
-              <BarChart className="h-4 w-4" />
-              Dashboard & Tickets
-            </TabsTrigger>
-            <TabsTrigger value="reports" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Relatórios da Equipe
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 mb-6">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="tickets">Tickets</TabsTrigger>
+            <TabsTrigger value="reports">Relatórios</TabsTrigger>
+            <TabsTrigger value="sla">SLA</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
@@ -345,7 +340,19 @@ const SupervisorDashboard = () => {
             {/* Filtros */}
             <Card>
               <CardHeader className="p-3 sm:p-6">
-                <CardTitle className="text-lg sm:text-xl">Filtros e Busca</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg sm:text-xl">Filtros e Busca</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefresh}
+                    disabled={ticketsLoading}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${ticketsLoading ? 'animate-spin' : ''}`} />
+                    Atualizar
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="p-3 sm:p-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -432,13 +439,16 @@ const SupervisorDashboard = () => {
                               </h3>
                               <div className="flex items-center gap-2 flex-wrap">
                                 <Badge className={getPriorityColor(ticket.priority)}>
-                                  {ticket.priority === 'urgent' ? 'Urgente' :
-                                   ticket.priority === 'high' ? 'Alta' :
-                                   ticket.priority === 'medium' ? 'Média' : 'Baixa'}
+                                  {getPriorityLabel(ticket.priority)}
                                 </Badge>
                                 <Badge variant="secondary" className={getStatusColor(ticket.status)}>
                                   {getStatusLabel(ticket.status)}
                                 </Badge>
+                                {ticket.sla_criticality && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {getSLACriticalityLabel(ticket.sla_criticality)}
+                                  </Badge>
+                                )}
                               </div>
                             </div>
                             <p className="text-sm text-slate-600 mb-2 line-clamp-2">{ticket.description}</p>
@@ -450,6 +460,17 @@ const SupervisorDashboard = () => {
                                 <Badge variant="outline" className="text-green-600 border-green-600 w-fit">
                                   Meu Ticket
                                 </Badge>
+                              )}
+                              {ticket.sla_status && (
+                                <SLAStatusIndicator 
+                                  status={ticket.sla_status}
+                                  responseDeadline={ticket.sla_response_deadline}
+                                  solutionDeadline={ticket.sla_solution_deadline}
+                                  firstResponseAt={ticket.sla_first_response_at}
+                                  solvedAt={ticket.sla_solved_at}
+                                  showDetails={false}
+                                  className="text-xs"
+                                />
                               )}
                             </div>
                           </div>
@@ -476,12 +497,143 @@ const SupervisorDashboard = () => {
             </Card>
           </TabsContent>
 
+          <TabsContent value="tickets" className="space-y-6">
+            {/* Filtros de busca e controles */}
+            <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
+              <div className="flex-1 max-w-md">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar tickets..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex flex-wrap gap-2">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="aberto">Aberto</SelectItem>
+                    <SelectItem value="em_andamento">Em Andamento</SelectItem>
+                    <SelectItem value="resolvido">Resolvido</SelectItem>
+                    <SelectItem value="fechado">Fechado</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue placeholder="Prioridade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas</SelectItem>
+                    <SelectItem value="baixa">Baixa</SelectItem>
+                    <SelectItem value="media">Média</SelectItem>
+                    <SelectItem value="alta">Alta</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Button onClick={handleRefresh} variant="outline" size="sm">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Atualizar
+                </Button>
+              </div>
+            </div>
+
+            {/* Lista de tickets da equipe */}
+            <Card>
+              <CardHeader className="p-3 sm:p-6">
+                <CardTitle className="text-lg sm:text-xl">
+                  Tickets da Equipe ({filteredTickets.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-6">
+                <div className="space-y-4">
+                  {filteredTickets.length === 0 ? (
+                    <div className="text-center py-8">
+                      <TicketIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">
+                        {searchTerm ? "Nenhum ticket encontrado com os filtros aplicados" : "Nenhum ticket encontrado"}
+                      </p>
+                    </div>
+                  ) : (
+                    filteredTickets.map((ticket) => (
+                      <div key={ticket.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm font-mono text-gray-500">
+                                #{ticket.ticket_number}
+                              </span>
+                              <Badge className={getStatusColor(ticket.status)}>
+                                {getStatusLabel(ticket.status)}
+                              </Badge>
+                              <Badge className={getPriorityColor(ticket.priority)}>
+                                {getPriorityLabel(ticket.priority)}
+                              </Badge>
+                              {ticket.sla_criticality && (
+                                <Badge variant="outline" className="text-xs">
+                                  {getSLACriticalityLabel(ticket.sla_criticality)}
+                                </Badge>
+                              )}
+                              {ticket.sla_status && (
+                                <SLAStatusIndicator 
+                                  status={ticket.sla_status}
+                                  responseDeadline={ticket.sla_response_deadline}
+                                  solutionDeadline={ticket.sla_solution_deadline}
+                                  showDetails={false}
+                                  className="text-xs"
+                                />
+                              )}
+                            </div>
+                            
+                            <h3 className="font-medium text-gray-900 mb-2">{ticket.subject}</h3>
+                            
+                            <div className="text-sm text-gray-600 space-y-1">
+                              <p><strong>Cliente:</strong> {ticket.customer?.name || 'N/A'}</p>
+                              <p><strong>Empresa:</strong> {ticket.company?.name || 'N/A'}</p>
+                              <p><strong>Departamento:</strong> {ticket.department}</p>
+                              <p><strong>Criado:</strong> {new Date(ticket.created_at).toLocaleString('pt-BR')}</p>
+                              {ticket.assignee && (
+                                <p><strong>Responsável:</strong> {ticket.assignee.name}</p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleViewTicket(ticket)}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              Ver
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="reports" className="space-y-6">
             <SupervisorReports 
-              tickets={filteredTickets} 
+              tickets={tickets} 
               companyInfo={companyInfo} 
               userName={userName} 
             />
+          </TabsContent>
+
+          <TabsContent value="sla" className="space-y-6">
+            <SLADashboard onRefresh={handleRefresh} />
           </TabsContent>
         </Tabs>
       </div>
@@ -519,11 +671,6 @@ const SupervisorDashboard = () => {
                       <Badge variant="secondary" className={getStatusColor(selectedTicket.status)}>
                         {getStatusLabel(selectedTicket.status)}
                       </Badge>
-                      {selectedTicket.customer_id === user?.id && (
-                        <Badge variant="outline" className="text-green-600 border-green-600">
-                          Meu Ticket
-                        </Badge>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -544,7 +691,7 @@ const SupervisorDashboard = () => {
                       {new Date(selectedTicket.created_at).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
-                  {selectedTicket.assignee && (
+                  {selectedTicket.assignee && selectedTicket.assignee !== 'Não atribuído' && (
                     <div>
                       <span className="text-sm font-medium text-gray-600">Responsável:</span>
                       <p className="text-sm text-gray-900">{selectedTicket.assignee?.name || selectedTicket.assignee}</p>
@@ -577,73 +724,11 @@ const SupervisorDashboard = () => {
                 </div>
               </div>
 
-              {/* Timeline/Histórico */}
-              <div className="mb-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Histórico do Ticket
-                </h3>
-                <div className="space-y-3">
-                  {/* Evento de criação */}
-                  <div className="flex gap-3">
-                    <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium text-gray-900">Sistema</span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(selectedTicket.created_at).toLocaleString('pt-BR')}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600">Ticket criado</p>
-                    </div>
-                  </div>
-
-                  {/* Eventos de atualização (se houver) */}
-                  {selectedTicket.updates && selectedTicket.updates.length > 0 && (
-                    selectedTicket.updates.map((update: any, index: number) => (
-                      <div key={index} className="flex gap-3">
-                        <div className="flex-shrink-0 w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-900">
-                              {update.user || update.name || 'Sistema'}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {update.date || new Date(update.created_at || Date.now()).toLocaleString('pt-BR')}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600">{update.message}</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-
-                  {/* Estado atual */}
-                  <div className="flex gap-3">
-                    <div className="flex-shrink-0 w-2 h-2 bg-gray-400 rounded-full mt-2"></div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium text-gray-900">Estado atual</span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(selectedTicket.updated_at || selectedTicket.created_at).toLocaleString('pt-BR')}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        Status: {getStatusLabel(selectedTicket.status)} • 
-                        Prioridade: {selectedTicket.priority === 'urgent' ? 'Urgente' :
-                                   selectedTicket.priority === 'high' ? 'Alta' :
-                                   selectedTicket.priority === 'medium' ? 'Média' : 'Baixa'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ações (apenas para supervisores/admins) */}
+              {/* Ações */}
               <div className="border-t pt-4">
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-gray-600">
-                    Visualizando como supervisor
+                    Ticket sendo supervisionado
                   </div>
                   <div className="flex gap-2">
                     <Button 

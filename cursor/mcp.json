@@ -8,7 +8,7 @@
         "--project-ref=tjjpwsjrmoisowewebcs"
       ],
       "env": {
-        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}",
+        "SUPABASE_ACCESS_TOKEN": "sbp_bdd502e487a30a4cd2fea82d65f3578a3473657b",
         "SUPABASE_PROJECT_REF": "tjjpwsjrmoisowewebcs",
         "SUPABASE_DB_PASSWORD": "${SUPABASE_DB_PASSWORD}"
       }

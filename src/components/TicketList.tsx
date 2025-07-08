@@ -1,36 +1,60 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Clock, AlertTriangle, User, Calendar, Zap, Shield, Settings } from "lucide-react";
 import { Ticket } from "@/hooks/useTickets";
 import { useState } from "react";
+import { SLAStatusIndicator } from '@/components/SLA/SLAStatusIndicator';
+import { SLA_CONFIGS } from '@/types/sla';
 
 interface TicketListProps {
   tickets: Ticket[];
   onTicketSelect: (ticket: Ticket) => void;
   selectedTicket?: Ticket | null;
+  searchTerm: string;
+  onSearchChange: (term: string) => void;
 }
 
-const TicketList = ({ tickets, onTicketSelect, selectedTicket }: TicketListProps) => {
-  const [searchTerm, setSearchTerm] = useState("");
+// Mapear ícones para cada criticidade SLA
+const getSLAIcon = (slaCriticality: string) => {
+  switch (slaCriticality) {
+    case 'muito_alta': return <Zap className="h-3 w-3" />;
+    case 'alta': return <AlertTriangle className="h-3 w-3" />;
+    case 'moderada': return <Clock className="h-3 w-3" />;
+    case 'padrao': return <Shield className="h-3 w-3" />;
+    case 'geral': return <Settings className="h-3 w-3" />;
+    default: return <Shield className="h-3 w-3" />;
+  }
+};
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "open": return "bg-red-100 text-red-800 border-red-200";
-      case "in_progress": return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "resolved": return "bg-green-100 text-green-800 border-green-200";
-      case "closed": return "bg-gray-100 text-gray-800 border-gray-200";
-      default: return "bg-gray-100 text-gray-800 border-gray-200";
+const TicketList = ({ tickets, onTicketSelect, selectedTicket, searchTerm, onSearchChange }: TicketListProps) => {
+  const [searchTermLocal, setSearchTermLocal] = useState("");
+
+  const getSLACriticalityLabel = (slaCriticality: string) => {
+    return SLA_CONFIGS[slaCriticality as keyof typeof SLA_CONFIGS]?.label || 'Padrão';
+  };
+
+  const getSLACriticalityColor = (slaCriticality: string) => {
+    const config = SLA_CONFIGS[slaCriticality as keyof typeof SLA_CONFIGS];
+    if (!config) return 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100';
+    
+    switch (config.color) {
+      case 'red': return 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100';
+      case 'orange': return 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100';
+      case 'yellow': return 'border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100';
+      case 'blue': return 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100';
+      case 'gray': return 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100';
+      default: return 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100';
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "urgent": return "bg-red-500";
-      case "high": return "bg-orange-500";
-      case "medium": return "bg-yellow-500";
-      case "low": return "bg-green-500";
-      default: return "bg-gray-500";
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "open": return "border-red-200 bg-red-50 text-red-700";
+      case "in_progress": return "border-yellow-200 bg-yellow-50 text-yellow-700";
+      case "resolved": return "border-green-200 bg-green-50 text-green-700";
+      case "closed": return "border-gray-200 bg-gray-50 text-gray-700";
+      default: return "border-gray-200 bg-gray-50 text-gray-700";
     }
   };
 
@@ -44,89 +68,118 @@ const TicketList = ({ tickets, onTicketSelect, selectedTicket }: TicketListProps
     }
   };
 
-  const getPriorityLabel = (priority: string) => {
-    switch (priority) {
-      case "urgent": return "Urgente";
-      case "high": return "Alta";
-      case "medium": return "Média";
-      case "low": return "Baixa";
-      default: return priority;
-    }
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
   const filteredTickets = tickets.filter(ticket =>
-    ticket.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ticket.ticket_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    ticket.description.toLowerCase().includes(searchTerm.toLowerCase())
+    ticket.subject.toLowerCase().includes(searchTermLocal.toLowerCase()) ||
+    ticket.ticket_number.toLowerCase().includes(searchTermLocal.toLowerCase()) ||
+    ticket.description.toLowerCase().includes(searchTermLocal.toLowerCase())
   );
 
   return (
-    <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-        <Input
-          placeholder="Buscar tickets..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-
-      <div className="space-y-3">
-        {filteredTickets.map((ticket) => (
-          <Card 
-            key={ticket.id}
-            className={`cursor-pointer transition-all hover:shadow-md ${
-              selectedTicket?.id === ticket.id ? 'ring-2 ring-primary' : ''
-            }`}
-            onClick={() => onTicketSelect(ticket)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center space-x-2">
-                  <span className="font-mono text-sm text-muted-foreground">
-                    {ticket.ticket_number}
-                  </span>
-                  <div className={`w-3 h-3 rounded-full ${getPriorityColor(ticket.priority)}`} />
-                </div>
-                <Badge variant="secondary" className={`text-xs ${getStatusColor(ticket.status)}`}>
-                  {getStatusLabel(ticket.status)}
-                </Badge>
-              </div>
-              
-              <h3 className="font-medium text-foreground mb-1 line-clamp-2">
-                {ticket.subject}
-              </h3>
-              
-              <p className="text-sm text-muted-foreground mb-2 line-clamp-2">
-                {ticket.description}
-              </p>
-              
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  {new Date(ticket.created_at).toLocaleDateString('pt-BR')}
-                </span>
-                <span className="capitalize">
-                  {getPriorityLabel(ticket.priority)}
-                </span>
-              </div>
-              
-              {ticket.customer && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  Cliente: {ticket.customer.name}
-                </div>
+    <Card className="h-full">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2">
+          <Search className="h-5 w-5" />
+          Tickets ({tickets.length})
+        </CardTitle>
+        <div className="relative">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar tickets..."
+            value={searchTermLocal}
+            onChange={(e) => {
+              setSearchTermLocal(e.target.value);
+              onSearchChange(e.target.value);
+            }}
+            className="pl-8"
+          />
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="space-y-2 max-h-[600px] overflow-y-auto px-4 pb-4">
+          {filteredTickets.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <AlertTriangle className="h-16 w-16 mx-auto mb-4 opacity-50" />
+              <p className="text-lg font-medium">Nenhum ticket encontrado</p>
+              {searchTermLocal && (
+                <p className="text-sm mt-2">Tente ajustar os filtros de busca</p>
               )}
-            </CardContent>
-          </Card>
-        ))}
-        
-        {filteredTickets.length === 0 && (
-          <div className="text-center text-muted-foreground py-8">
-            {searchTerm ? 'Nenhum ticket encontrado' : 'Nenhum ticket ainda'}
-          </div>
-        )}
-      </div>
-    </div>
+            </div>
+          ) : (
+            filteredTickets.map((ticket) => (
+              <div
+                key={ticket.id}
+                className={`p-4 border rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/30 ${
+                  selectedTicket?.id === ticket.id ? 'ring-2 ring-primary bg-primary/5 border-primary' : 'hover:bg-muted/30'
+                }`}
+                onClick={() => onTicketSelect(ticket)}
+              >
+                <div className="space-y-3">
+                  {/* Header com número e badges */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm font-mono text-muted-foreground font-medium">
+                          #{ticket.ticket_number || ticket.id}
+                        </span>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Badge className={getStatusColor(ticket.status)} variant="outline">
+                            {getStatusLabel(ticket.status)}
+                          </Badge>
+                          {ticket.sla_status && (
+                            <SLAStatusIndicator 
+                              status={ticket.sla_status}
+                              showDetails={false}
+                              className="text-xs"
+                            />
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Assunto */}
+                      <h4 className="font-semibold text-sm leading-relaxed line-clamp-2 text-gray-900 mb-2">
+                        {ticket.subject}
+                      </h4>
+                    </div>
+                  </div>
+
+                  {/* Criticidade SLA destacada */}
+                  <div className="flex items-center justify-between">
+                    <Badge 
+                      className={`flex items-center gap-2 px-3 py-1 font-medium ${getSLACriticalityColor(ticket.sla_criticality || 'padrao')}`}
+                      variant="outline"
+                    >
+                      {getSLAIcon(ticket.sla_criticality || 'padrao')}
+                      <span>{getSLACriticalityLabel(ticket.sla_criticality || 'padrao')}</span>
+                    </Badge>
+                    
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      <span className="font-medium">{formatDate(ticket.created_at)}</span>
+                    </div>
+                  </div>
+
+                  {/* Informações adicionais */}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground bg-gray-50 px-3 py-2 rounded-lg">
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium text-gray-600">Departamento:</span>
+                      <span>{ticket.department}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      <span>{ticket.customer?.name || 'Cliente não identificado'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

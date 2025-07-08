@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { performanceLogger } from '@/utils/performanceLogger';
+import { SLACriticality, SLAStatus } from '@/types/sla';
 
 export interface Ticket {
   id: string;
@@ -16,6 +16,15 @@ export interface Ticket {
   estimated_date?: string;
   created_at: string;
   updated_at: string;
+  // Campos SLA
+  sla_criticality?: SLACriticality;
+  sla_response_deadline?: string;
+  sla_solution_deadline?: string;
+  sla_first_response_at?: string;
+  sla_solved_at?: string;
+  sla_custom_solution_date?: string;
+  sla_status?: SLAStatus;
+  // Relacionamentos
   customer?: {
     name: string;
     user_id: string;
@@ -40,7 +49,7 @@ export interface TicketUpdate {
   created_at: string;
   user?: {
     name: string;
-  } | null;
+  };
 }
 
 export interface TicketAttachment {
@@ -57,19 +66,16 @@ export interface TicketAttachment {
 export const useTickets = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { user, isAdmin, isSupport, isSupervisor } = useAuth();
+  const { user, isAdmin, isSupport, isSupervisor, isAttendant, userCompany, attendantCompanies } = useAuth();
 
   const fetchTickets = useCallback(async () => {
     if (!user) return;
 
-    const operationId = `fetch_tickets_${Date.now()}`;
-    performanceLogger.startOperation(operationId, 'Buscar Tickets');
-
     try {
       setIsLoading(true);
       
-      // Buscar tickets com informações da empresa
-      let query = (supabase as any)
+      // Buscar tickets com informações da empresa e campos SLA (se existirem)
+      const { data: ticketsData, error: ticketsError } = await (supabase as any)
         .from('tickets')
         .select(`
           *,
@@ -77,46 +83,12 @@ export const useTickets = () => {
         `)
         .order('created_at', { ascending: false });
 
-      // Aplicar filtros baseados nas roles
-      if (!isAdmin && !isSupport) {
-        if (isSupervisor) {
-          // Supervisores veem tickets da empresa onde trabalham
-          const { data: userProfile } = await supabase
-            .from('profiles')
-            .select('company_id')
-            .eq('user_id', user.id)
-            .single();
-          
-          if (userProfile?.company_id) {
-            // Tickets onde: é o cliente OU é da mesma empresa OU está atribuído a ele
-            query = query.or(`customer_id.eq.${user.id},company_id.eq.${userProfile.company_id},assignee_id.eq.${user.id}`);
-          } else {
-            // Se supervisor sem empresa, vê apenas seus próprios tickets
-            query = query.eq('customer_id', user.id);
-          }
-        } else {
-          // Usuários normais veem apenas seus próprios tickets
-          query = query.eq('customer_id', user.id);
-        }
-      }
-      // Admin e Support veem todos os tickets (sem filtro adicional)
-
-      const { data: ticketsData, error: ticketsError } = await query;
-
       if (ticketsError) {
-        performanceLogger.endOperation(operationId, false, { 
-          role: isAdmin ? 'admin' : isSupport ? 'support' : isSupervisor ? 'supervisor' : 'user',
-          filtersApplied: !isAdmin && !isSupport
-        }, ticketsError.message, user.id);
-        console.error('Error fetching tickets:', ticketsError);
+        console.error('Erro ao buscar tickets:', ticketsError);
         return;
       }
 
       if (!ticketsData || ticketsData.length === 0) {
-        performanceLogger.endOperation(operationId, true, { 
-          ticketsCount: 0,
-          role: isAdmin ? 'admin' : isSupport ? 'support' : isSupervisor ? 'supervisor' : 'user'
-        }, undefined, user.id);
         setTickets([]);
         return;
       }
@@ -135,7 +107,7 @@ export const useTickets = () => {
         .in('user_id', userIds);
 
       if (profilesError) {
-        console.warn('Error fetching profiles:', profilesError);
+        console.warn('Erro ao buscar perfis:', profilesError);
       }
 
       // Criar mapa de profiles para lookup rápido
@@ -149,44 +121,31 @@ export const useTickets = () => {
         ...ticket,
         customer: profilesMap[ticket.customer_id] || null,
         assignee: ticket.assignee_id ? profilesMap[ticket.assignee_id] || null : null,
-        company: ticket.company || null // Já vem do join
+        company: ticket.company || null,
+        // Adicionar campos SLA com valores padrão se não existirem
+        sla_criticality: ticket.sla_criticality || 'padrao' as SLACriticality,
+        sla_status: ticket.sla_status || 'within_deadline' as SLAStatus
       }));
 
       setTickets(enrichedTickets);
-      
-      performanceLogger.endOperation(operationId, true, { 
-        ticketsCount: enrichedTickets.length,
-        profilesLoaded: Object.keys(profilesMap).length,
-        role: isAdmin ? 'admin' : isSupport ? 'support' : isSupervisor ? 'supervisor' : 'user'
-      }, undefined, user.id);
-      
-      console.log(`✅ ${enrichedTickets.length} tickets carregados`);
     } catch (error) {
-      performanceLogger.endOperation(operationId, false, { 
-        role: isAdmin ? 'admin' : isSupport ? 'support' : isSupervisor ? 'supervisor' : 'user'
-      }, error instanceof Error ? error.message : 'Erro desconhecido', user.id);
-      console.error('Erro ao buscar tickets:', error);
+      console.error('Erro inesperado ao buscar tickets:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [user, isAdmin, isSupport, isSupervisor]);
+  }, [user, isAdmin, isSupport, isSupervisor, isAttendant, userCompany, attendantCompanies]);
 
   const uploadFile = async (file: File, ticketId: string): Promise<{ success: boolean; fileUrl?: string; error?: string }> => {
     try {
-      // Primeiro verificar se o bucket existe
       const storageConfigured = await checkStorageConfiguration();
       if (!storageConfigured) {
         return { success: false, error: 'Storage não configurado' };
       }
 
-      // Gerar nome único para o arquivo
       const timestamp = new Date().getTime();
       const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileName = `${user!.id}/${ticketId}/${timestamp}_${sanitizedFileName}`;
 
-      console.log('🔄 Fazendo upload do arquivo:', fileName);
-
-      // Upload para o Supabase Storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('ticket-attachments')
         .upload(fileName, file, {
@@ -195,16 +154,11 @@ export const useTickets = () => {
         });
 
       if (uploadError) {
-        console.error('Error uploading file:', uploadError);
         return { success: false, error: uploadError.message };
       }
 
-      console.log('✅ Upload realizado com sucesso:', uploadData.path);
-
-      // Retornar o caminho do arquivo para ser salvo no banco
       return { success: true, fileUrl: fileName };
     } catch (error) {
-      console.error('Error in uploadFile:', error);
       return { success: false, error: 'Erro interno no upload' };
     }
   };
@@ -216,7 +170,7 @@ export const useTickets = () => {
         .insert({
           ticket_id: ticketId,
           file_name: file.name,
-          file_url: fileName, // Salvar apenas o nome do arquivo, não a URL completa
+          file_url: fileName,
           file_size: file.size,
           file_type: file.type,
           uploaded_by: user!.id
@@ -225,13 +179,11 @@ export const useTickets = () => {
         .single();
 
       if (error) {
-        console.error('Error creating ticket attachment:', error);
         return { error: error.message };
       }
 
       return { data, error: null };
     } catch (error) {
-      console.error('Error creating ticket attachment:', error);
       return { error: 'Erro interno do servidor' };
     }
   };
@@ -242,15 +194,11 @@ export const useTickets = () => {
     priority: string;
     department: string;
     attachment?: File | null;
+    sla_criticality?: SLACriticality; // Novo campo SLA
   }) => {
     if (!user) return { error: 'User not authenticated' };
 
-    const operationId = `create_ticket_${Date.now()}`;
-    performanceLogger.startOperation(operationId, 'Criar Ticket');
-
     try {
-      console.log('🎫 Criando ticket...');
-      
       // Buscar informações do perfil do usuário para obter company_id
       const { data: userProfile, error: profileError } = await supabase
         .from('profiles')
@@ -259,107 +207,92 @@ export const useTickets = () => {
         .single();
 
       if (profileError) {
-        performanceLogger.endOperation(operationId, false, { 
-          step: 'fetch_profile' 
-        }, profileError.message, user.id);
-        console.error('Error fetching user profile:', profileError);
         return { error: 'Erro ao buscar perfil do usuário' };
       }
-
-      console.log('👤 Perfil do usuário:', userProfile);
       
-      // Criar o ticket com company_id vinculado
+      // Criar o ticket com campos SLA
       const ticketInsertData = {
         subject: ticketData.subject,
         description: ticketData.description,
         priority: ticketData.priority as any,
         department: ticketData.department,
         customer_id: user.id,
-        company_id: userProfile?.company_id || null, // Incluir company_id se disponível
-        ticket_number: '' // Will be auto-generated by trigger
+        company_id: userProfile?.company_id || null,
+        ticket_number: '',
+        // Campos SLA (com valores padrão se não fornecidos)
+        sla_criticality: ticketData.sla_criticality || 'padrao'
       };
 
-      console.log('📋 Dados do ticket a ser criado:', ticketInsertData);
+      let ticketCreateData: any = null;
 
-      const { data: ticketCreateData, error: ticketError } = await supabase
+      const { data: initialTicketData, error: ticketError } = await supabase
         .from('tickets')
         .insert(ticketInsertData)
         .select('*')
         .single();
 
       if (ticketError) {
-        performanceLogger.endOperation(operationId, false, { 
-          step: 'create_ticket',
-          ticketData: ticketInsertData
-        }, ticketError.message, user.id);
-        console.error('Error creating ticket:', ticketError);
-        return { error: ticketError.message };
+        console.warn('Campos SLA podem não estar implementados ainda:', ticketError.message);
+        
+        // Tentar criar sem campos SLA se houver erro
+        const basicTicketData = {
+          subject: ticketData.subject,
+          description: ticketData.description,
+          priority: ticketData.priority as any,
+          department: ticketData.department,
+          customer_id: user.id,
+          company_id: userProfile?.company_id || null,
+          ticket_number: ''
+        };
+
+        const { data: basicTicketCreateData, error: basicTicketError } = await supabase
+          .from('tickets')
+          .insert(basicTicketData)
+          .select('*')
+          .single();
+
+        if (basicTicketError) {
+          return { error: basicTicketError.message };
+        }
+
+        // Usar dados do ticket básico
+        ticketCreateData = basicTicketCreateData;
+      } else {
+        ticketCreateData = initialTicketData;
       }
 
-      console.log('✅ Ticket criado no banco:', ticketCreateData);
-
       // Criar objeto ticket enriquecido para o estado local
-      const enrichedTicket = {
+      const enrichedTicket: Ticket = {
         ...ticketCreateData,
         customer: userProfile || { user_id: user.id, name: 'Usuário' },
         assignee: null,
         company: userProfile?.company_id ? { 
           id: userProfile.company_id, 
-          name: 'Empresa' // Será atualizado no refresh 
-        } : null
+          name: 'Empresa'
+        } : null,
+        // Adicionar campos SLA padrão
+        sla_criticality: (ticketData.sla_criticality || 'padrao') as SLACriticality,
+        sla_status: 'within_deadline' as SLAStatus
       };
 
-      // Adicionar o ticket diretamente ao estado local (no início da lista)
+      // Adicionar o ticket ao estado local
       setTickets(prevTickets => [enrichedTicket, ...prevTickets]);
-      
-      console.log('✅ Ticket adicionado ao estado local');
 
       // Se há anexo, fazer upload e criar registro
-      let attachmentSuccess = true;
       if (ticketData.attachment && ticketCreateData) {
         const uploadResult = await uploadFile(ticketData.attachment, ticketCreateData.id);
         
         if (uploadResult.success && uploadResult.fileUrl) {
-          const attachmentResult = await createTicketAttachment(
+          await createTicketAttachment(
             ticketCreateData.id,
             ticketData.attachment,
             uploadResult.fileUrl
           );
-
-          if (attachmentResult.error) {
-            console.warn('Ticket criado mas falha ao salvar anexo:', attachmentResult.error);
-            attachmentSuccess = false;
-          } else {
-            console.log('✅ Ticket criado com anexo');
-          }
-        } else {
-          console.warn('Ticket criado mas falha no upload:', uploadResult.error);
-          attachmentSuccess = false;
         }
-      } else {
-        console.log('✅ Ticket criado com sucesso');
       }
-
-      performanceLogger.endOperation(operationId, true, { 
-        ticketId: ticketCreateData.id,
-        ticketNumber: ticketCreateData.ticket_number,
-        hasAttachment: !!ticketData.attachment,
-        attachmentSuccess,
-        companyId: userProfile?.company_id
-      }, undefined, user.id);
-
-      // Refresh para garantir sincronização completa com joins
-      setTimeout(() => {
-        console.log('🔄 Refresh para sincronização completa...');
-        fetchTickets();
-      }, 1000);
       
       return { data: ticketCreateData, error: null };
     } catch (error) {
-      performanceLogger.endOperation(operationId, false, { 
-        step: 'unexpected_error'
-      }, error instanceof Error ? error.message : 'Erro desconhecido', user.id);
-      console.error('Error creating ticket:', error);
       return { error: 'Erro interno do servidor' };
     }
   };
@@ -373,13 +306,11 @@ export const useTickets = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching ticket attachments:', error);
         return { data: [], error: error.message };
       }
 
       return { data: data || [], error: null };
     } catch (error) {
-      console.error('Error fetching ticket attachments:', error);
       return { data: [], error: 'Erro interno do servidor' };
     }
   };
@@ -395,7 +326,6 @@ export const useTickets = () => {
         return;
       }
 
-      // Criar URL temporária para download
       const url = URL.createObjectURL(data);
       const a = document.createElement('a');
       a.href = url;
@@ -404,8 +334,6 @@ export const useTickets = () => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
-      console.log(`📥 Download iniciado: ${attachment.file_name}`);
     } catch (error) {
       console.error('Error in downloadAttachment:', error);
     }
@@ -415,8 +343,6 @@ export const useTickets = () => {
     if (!user) return { error: 'User not authenticated' };
 
     try {
-      console.log('📝 Atualizando ticket:', ticketId);
-      
       const { data, error } = await supabase
         .from('tickets')
         .update(updates)
@@ -425,20 +351,11 @@ export const useTickets = () => {
         .single();
 
       if (error) {
-        console.error('Error updating ticket:', error);
         return { error: error.message };
       }
-
-      console.log('✅ Ticket atualizado:', data);
-
-      // Forçar refresh imediato da lista de tickets
-      setTimeout(() => {
-        fetchTickets();
-      }, 100);
       
       return { data, error: null };
     } catch (error) {
-      console.error('Error updating ticket:', error);
       return { error: 'Erro interno do servidor' };
     }
   };
@@ -447,8 +364,6 @@ export const useTickets = () => {
     if (!user) return { error: 'User not authenticated' };
 
     try {
-      console.log('💬 Adicionando comentário ao ticket:', ticketId);
-      
       const { data, error } = await supabase
         .from('ticket_updates')
         .insert({
@@ -460,11 +375,8 @@ export const useTickets = () => {
         .single();
 
       if (error) {
-        console.error('Error adding ticket update:', error);
         return { error: error.message };
       }
-
-      console.log('✅ Comentário adicionado:', data);
 
       // Buscar informações do usuário separadamente
       let enrichedData: any = data;
@@ -483,149 +395,37 @@ export const useTickets = () => {
         }
       }
 
-      // Forçar refresh da lista de tickets para capturar mudanças
-      setTimeout(() => {
-        fetchTickets();
-      }, 100);
-
       return { data: enrichedData, error: null };
     } catch (error) {
-      console.error('Error adding ticket update:', error);
       return { error: 'Erro interno do servidor' };
     }
   };
 
-  const fetchTicketUpdates = async (ticketId: string) => {
+  const checkStorageConfiguration = async (): Promise<boolean> => {
     try {
-      const { data: updatesData, error: updatesError } = await supabase
-        .from('ticket_updates')
-        .select('*')
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true });
-
-      if (updatesError) {
-        console.error('Error fetching ticket updates:', updatesError);
-        return { data: [], error: updatesError.message };
-      }
-
-      if (!updatesData || updatesData.length === 0) {
-        return { data: [], error: null };
-      }
-
-      // Buscar informações dos usuários
-      const userIds = [...new Set(updatesData.map(u => u.user_id))];
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('user_id, name')
-        .in('user_id', userIds);
-
-      if (profilesError) {
-        console.warn('Error fetching profiles for updates:', profilesError);
-      }
-
-      // Criar mapa de profiles
-      const profilesMap = (profilesData || []).reduce((acc, profile) => {
-        acc[profile.user_id] = profile;
-        return acc;
-      }, {} as Record<string, { user_id: string; name: string }>);
-
-      // Enriquecer updates com dados dos usuários
-      const enrichedUpdates = updatesData.map(update => ({
-        ...update,
-        user: profilesMap[update.user_id] || null
-      }));
-
-      return { data: enrichedUpdates, error: null };
+      const { data, error } = await supabase.storage.getBucket('ticket-attachments');
+      return !error && data !== null;
     } catch (error) {
-      console.error('Error fetching ticket updates:', error);
-      return { data: [], error: 'Erro interno do servidor' };
-    }
-  };
-
-  const checkStorageConfiguration = async () => {
-    try {
-      // Testar se o bucket existe tentando listar arquivos
-      const { data, error } = await supabase.storage
-        .from('ticket-attachments')
-        .list('', { limit: 1 });
-
-      if (error) {
-        console.error('Storage bucket não encontrado:', error);
-        
-        // Tentar criar o bucket automaticamente
-        console.log('Tentando criar bucket ticket-attachments...');
-        const { data: bucketData, error: bucketError } = await supabase.storage
-          .createBucket('ticket-attachments', { public: false });
-
-        if (bucketError) {
-          console.error('Erro ao criar bucket:', bucketError);
-          return false;
-        } else {
-          console.log('✅ Bucket criado com sucesso');
-          return true;
-        }
-      }
-
-      console.log('✅ Storage configurado corretamente');
-      return true;
-    } catch (error) {
-      console.error('Erro ao verificar storage:', error);
+      console.warn('Storage bucket não configurado:', error);
       return false;
     }
   };
 
-  const refreshTickets = fetchTickets;
-
-  useEffect(() => {
-    console.log('🚀 Inicializando useTickets...');
-    
-    // Buscar tickets inicial
+  const refreshTickets = useCallback(() => {
     fetchTickets();
+  }, [fetchTickets]);
 
-    // Set up real-time subscription apenas se o usuário estiver autenticado
-    if (!user) return;
+  // Carregar tickets inicial
+  useEffect(() => {
+    fetchTickets();
+  }, [fetchTickets]);
 
-    console.log('📡 Configurando subscriptions...');
-    
-    const channel = supabase
-      .channel('tickets-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'tickets'
-        },
-        (payload) => {
-          console.log('🔄 Ticket change detected:', payload.eventType);
-          performanceLogger.logSync('Real-time Ticket Update', true, { 
-            eventType: payload.eventType,
-            table: 'tickets'
-          }, undefined, user.id);
-          // Refresh com delay para garantir consistência
-          setTimeout(fetchTickets, 300);
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Real-time subscriptions active');
-          performanceLogger.logSync('Real-time Subscription', true, { 
-            status: 'SUBSCRIBED',
-            channel: 'tickets-realtime'
-          }, undefined, user.id);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.warn('⚠️ Real-time subscription error, will retry...');
-          performanceLogger.logSync('Real-time Subscription', false, { 
-            status: 'CHANNEL_ERROR'
-          }, 'Erro na subscription real-time', user.id);
-        }
-      });
-
-    return () => {
-      console.log('🔌 Cleanup subscriptions');
-      supabase.removeChannel(channel);
-    };
-  }, [fetchTickets, user]);
+  // Recarregar quando dados de autenticação mudarem
+  useEffect(() => {
+    if (user && userCompany) {
+      fetchTickets();
+    }
+  }, [user, userCompany]);
 
   return {
     tickets,
@@ -637,7 +437,8 @@ export const useTickets = () => {
     downloadAttachment,
     updateTicket,
     addTicketUpdate,
-    fetchTicketUpdates,
+    uploadFile,
+    createTicketAttachment,
     checkStorageConfiguration
   };
 };

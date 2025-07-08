@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,6 +6,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Upload, X, FileText, Image, File } from "lucide-react";
+import { SLASelector } from '@/components/SLA/SLASelector';
+import { useSLA } from '@/hooks/useSLA';
+import { SLACriticality } from '@/types/sla';
 
 interface NewTicketFormProps {
   createTicket: (ticketData: any) => Promise<{ data?: any; error?: string }>;
@@ -16,11 +19,25 @@ const NewTicketForm = ({ createTicket, onSuccess }: NewTicketFormProps) => {
   const [formData, setFormData] = useState({
     subject: "",
     description: "",
-    priority: "medium",
-    department: ""
+    department: "",
+    sla_criticality: 'padrao' as SLACriticality
   });
   const [attachment, setAttachment] = useState<File | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const { canEditSLA } = useSLA();
+
+  // Mapear criticidade SLA para prioridade para compatibilidade
+  const mapSLAToPriority = (slaCriticality: SLACriticality): string => {
+    switch (slaCriticality) {
+      case 'muito_alta': return 'urgent';
+      case 'alta': return 'high';
+      case 'moderada': return 'medium';
+      case 'padrao': return 'medium';
+      case 'geral': return 'low';
+      default: return 'medium';
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +63,7 @@ const NewTicketForm = ({ createTicket, onSuccess }: NewTicketFormProps) => {
       console.log('📤 Enviando dados para createTicket...');
       const result = await createTicket({
         ...formData,
+        priority: mapSLAToPriority(formData.sla_criticality), // Mapear SLA para prioridade
         attachment: attachment
       });
 
@@ -56,8 +74,8 @@ const NewTicketForm = ({ createTicket, onSuccess }: NewTicketFormProps) => {
         setFormData({
           subject: "",
           description: "",
-          priority: "medium",
-          department: ""
+          department: "",
+          sla_criticality: 'padrao'
         });
         setAttachment(null);
         onSuccess();
@@ -110,9 +128,9 @@ const NewTicketForm = ({ createTicket, onSuccess }: NewTicketFormProps) => {
   };
 
   return (
-    <Card>
+    <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>Novo Ticket</CardTitle>
+        <CardTitle>Criar Novo Ticket</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -152,25 +170,6 @@ const NewTicketForm = ({ createTicket, onSuccess }: NewTicketFormProps) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="priority">Prioridade</Label>
-            <Select 
-              value={formData.priority} 
-              onValueChange={(value) => setFormData({ ...formData, priority: value })}
-              disabled={isLoading}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Baixa</SelectItem>
-                <SelectItem value="medium">Média</SelectItem>
-                <SelectItem value="high">Alta</SelectItem>
-                <SelectItem value="urgent">Urgente</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="description">Descrição *</Label>
             <Textarea
               id="description"
@@ -181,6 +180,19 @@ const NewTicketForm = ({ createTicket, onSuccess }: NewTicketFormProps) => {
               required
               disabled={isLoading}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Criticidade SLA *</Label>
+            <SLASelector
+              value={formData.sla_criticality}
+              onChange={(value) => setFormData({ ...formData, sla_criticality: value })}
+              canEdit={true}
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground">
+              Selecione a criticidade baseada no impacto do problema no seu negócio
+            </p>
           </div>
 
           <div className="space-y-2">
